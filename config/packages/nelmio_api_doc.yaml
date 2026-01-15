@@ -1,0 +1,21 @@
+nelmio_api_doc:
+    documentation:
+        info:
+            title: Sports Platform API
+            description: API REST pour la plateforme de réservation sportive
+            version: 1.0.0
+        servers:
+            - url: http://localhost:8001
+              description: Serveur de développement
+        components:
+            securitySchemes:
+                Bearer:
+                    type: http
+                    scheme: bearer
+                    bearerFormat: JWT
+                    description: "Entrez votre token JWT (obtenu via /api/login)"
+        security:
+            - Bearer: []
+    areas:
+        path_patterns:
+            - ^/api(?!/doc$)

@@ -13,11 +13,64 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
+use OpenApi\Attributes as OA;
 
 #[Route('/api/bookings')]
+#[OA\Tag(name: 'Bookings')]
 class BookingsController extends AbstractController
 {
     #[Route('', name: 'bookings_list', methods: ['GET'])]
+    #[OA\Get(
+        path: '/api/bookings',
+        summary: 'Liste toutes les réservations avec filtres optionnels',
+        security: [['Bearer' => []]],
+        tags: ['Bookings']
+    )]
+    #[OA\Parameter(
+        name: 'userId',
+        in: 'query',
+        required: false,
+        schema: new OA\Schema(type: 'integer'),
+        description: 'Filtrer par ID client'
+    )]
+    #[OA\Parameter(
+        name: 'profileId',
+        in: 'query',
+        required: false,
+        schema: new OA\Schema(type: 'integer'),
+        description: 'Filtrer par ID professionnel'
+    )]
+    #[OA\Parameter(
+        name: 'status',
+        in: 'query',
+        required: false,
+        schema: new OA\Schema(type: 'string', enum: ['pending', 'confirmed', 'cancelled', 'completed']),
+        description: 'Filtrer par statut'
+    )]
+    #[OA\Response(
+        response: 200,
+        description: 'Liste des réservations',
+        content: new OA\JsonContent(
+            properties: [
+                new OA\Property(property: 'success', type: 'boolean', example: true),
+                new OA\Property(
+                    property: 'data',
+                    type: 'array',
+                    items: new OA\Items(
+                        properties: [
+                            new OA\Property(property: 'id', type: 'integer'),
+                            new OA\Property(property: 'startTime', type: 'string', format: 'date-time'),
+                            new OA\Property(property: 'endTime', type: 'string', format: 'date-time'),
+                            new OA\Property(property: 'status', type: 'string'),
+                            new OA\Property(property: 'totalPrice', type: 'string'),
+                            new OA\Property(property: 'notes', type: 'string')
+                        ],
+                        type: 'object'
+                    )
+                )
+            ]
+        )
+    )]
     public function list(Request $request, BookingRepository $bookingRepository): JsonResponse
     {
         $userId = $request->query->get('userId');
@@ -75,6 +128,20 @@ class BookingsController extends AbstractController
     }
 
     #[Route('/{id}', name: 'bookings_show', methods: ['GET'])]
+    #[OA\Get(
+        path: '/api/bookings/{id}',
+        summary: 'Affiche une réservation spécifique',
+        security: [['Bearer' => []]],
+        tags: ['Bookings']
+    )]
+    #[OA\Parameter(
+        name: 'id',
+        in: 'path',
+        required: true,
+        schema: new OA\Schema(type: 'integer')
+    )]
+    #[OA\Response(response: 200, description: 'Détails de la réservation')]
+    #[OA\Response(response: 404, description: 'Réservation non trouvée')]
     public function show(int $id, BookingRepository $bookingRepository): JsonResponse
     {
         $booking = $bookingRepository->find($id);
@@ -116,6 +183,29 @@ class BookingsController extends AbstractController
     }
 
     #[Route('', name: 'bookings_create', methods: ['POST'])]
+    #[OA\Post(
+        path: '/api/bookings',
+        summary: 'Créer une nouvelle réservation',
+        security: [['Bearer' => []]],
+        tags: ['Bookings']
+    )]
+    #[OA\RequestBody(
+        required: true,
+        content: new OA\JsonContent(
+            required: ['clientId', 'profileId', 'startTime', 'endTime'],
+            properties: [
+                new OA\Property(property: 'clientId', type: 'integer', example: 1),
+                new OA\Property(property: 'profileId', type: 'integer', example: 1),
+                new OA\Property(property: 'startTime', type: 'string', format: 'date-time', example: '2025-01-30 10:00:00'),
+                new OA\Property(property: 'endTime', type: 'string', format: 'date-time', example: '2025-01-30 12:00:00'),
+                new OA\Property(property: 'notes', type: 'string', example: 'Cours de tennis débutant'),
+                new OA\Property(property: 'venueId', type: 'integer', example: 1, nullable: true)
+            ]
+        )
+    )]
+    #[OA\Response(response: 201, description: 'Réservation créée avec succès')]
+    #[OA\Response(response: 400, description: 'Données invalides')]
+    #[OA\Response(response: 409, description: 'Conflit de disponibilité')]
     public function create(
         Request $request,
         EntityManagerInterface $em,
@@ -201,6 +291,30 @@ class BookingsController extends AbstractController
     }
 
     #[Route('/{id}/status', name: 'bookings_update_status', methods: ['PATCH'])]
+    #[OA\Patch(
+        path: '/api/bookings/{id}/status',
+        summary: 'Mettre à jour le statut d\'une réservation',
+        security: [['Bearer' => []]],
+        tags: ['Bookings']
+    )]
+    #[OA\Parameter(
+        name: 'id',
+        in: 'path',
+        required: true,
+        schema: new OA\Schema(type: 'integer')
+    )]
+    #[OA\RequestBody(
+        required: true,
+        content: new OA\JsonContent(
+            required: ['status'],
+            properties: [
+                new OA\Property(property: 'status', type: 'string', enum: ['pending', 'confirmed', 'cancelled', 'completed']),
+                new OA\Property(property: 'cancellationReason', type: 'string', nullable: true)
+            ]
+        )
+    )]
+    #[OA\Response(response: 200, description: 'Statut mis à jour avec succès')]
+    #[OA\Response(response: 404, description: 'Réservation non trouvée')]
     public function updateStatus(
         int $id,
         Request $request,

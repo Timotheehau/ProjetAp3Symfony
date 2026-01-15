@@ -1,9 +1,7 @@
 security:
-    # https://symfony.com/doc/current/security.html#registering-the-user-hashing-passwords
     password_hashers:
         Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface: 'auto'
 
-    # https://symfony.com/doc/current/security.html#loading-the-user-the-user-provider
     providers:
         app_user_provider:
             entity:
@@ -13,6 +11,12 @@ security:
     firewalls:
         dev:
             pattern: ^/(_(profiler|wdt)|css|images|js)/
+            security: false
+
+        # Refresh token AVANT les autres routes API
+        refresh:
+            pattern: ^/api/token/refresh
+            stateless: true
             security: false
 
         login:
@@ -28,6 +32,11 @@ security:
             stateless: true
             security: false
 
+        doc:
+            pattern: ^/api/doc
+            stateless: true
+            security: false
+
         api:
             pattern: ^/api
             stateless: true
@@ -40,6 +49,8 @@ security:
     access_control:
         - { path: ^/api/login, roles: PUBLIC_ACCESS }
         - { path: ^/api/register, roles: PUBLIC_ACCESS }
+        - { path: ^/api/token/refresh, roles: PUBLIC_ACCESS }
+        - { path: ^/api/doc, roles: PUBLIC_ACCESS }
         - { path: ^/api/sports, roles: PUBLIC_ACCESS, methods: [GET] }
         - { path: ^/api/profiles, roles: PUBLIC_ACCESS, methods: [GET] }
         - { path: ^/api/venues, roles: PUBLIC_ACCESS, methods: [GET] }

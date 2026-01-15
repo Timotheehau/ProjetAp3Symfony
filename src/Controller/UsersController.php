@@ -11,11 +11,43 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
+use OpenApi\Attributes as OA;
 
 #[Route('/api/users')]
+#[OA\Tag(name: 'Users')]
 class UsersController extends AbstractController
 {
     #[Route('', name: 'users_list', methods: ['GET'])]
+    #[OA\Get(
+        path: '/api/users',
+        summary: 'Liste tous les utilisateurs',
+        security: [['Bearer' => []]],
+        tags: ['Users']
+    )]
+    #[OA\Response(
+        response: 200,
+        description: 'Liste des utilisateurs',
+        content: new OA\JsonContent(
+            properties: [
+                new OA\Property(property: 'success', type: 'boolean', example: true),
+                new OA\Property(
+                    property: 'data',
+                    type: 'array',
+                    items: new OA\Items(
+                        properties: [
+                            new OA\Property(property: 'id', type: 'integer', example: 1),
+                            new OA\Property(property: 'email', type: 'string', example: 'user@example.com'),
+                            new OA\Property(property: 'firstName', type: 'string', example: 'John'),
+                            new OA\Property(property: 'lastName', type: 'string', example: 'Doe'),
+                            new OA\Property(property: 'phone', type: 'string', example: '0612345678'),
+                            new OA\Property(property: 'userType', type: 'string', example: 'particular')
+                        ],
+                        type: 'object'
+                    )
+                )
+            ]
+        )
+    )]
     public function list(UserRepository $userRepository): JsonResponse
     {
         $users = $userRepository->findAll();
@@ -38,6 +70,27 @@ class UsersController extends AbstractController
     }
 
     #[Route('/{id}', name: 'users_show', methods: ['GET'])]
+    #[OA\Get(
+        path: '/api/users/{id}',
+        summary: 'Affiche un utilisateur spécifique',
+        security: [['Bearer' => []]],
+        tags: ['Users']
+    )]
+    #[OA\Parameter(
+        name: 'id',
+        in: 'path',
+        required: true,
+        schema: new OA\Schema(type: 'integer'),
+        example: 1
+    )]
+    #[OA\Response(
+        response: 200,
+        description: 'Détails de l\'utilisateur'
+    )]
+    #[OA\Response(
+        response: 404,
+        description: 'Utilisateur non trouvé'
+    )]
     public function show(int $id, UserRepository $userRepository): JsonResponse
     {
         $user = $userRepository->find($id);
@@ -63,6 +116,30 @@ class UsersController extends AbstractController
     }
 
     #[Route('', name: 'users_create', methods: ['POST'])]
+    #[OA\Post(
+        path: '/api/users',
+        summary: 'Créer un nouvel utilisateur',
+        security: [['Bearer' => []]],
+        tags: ['Users']
+    )]
+    #[OA\RequestBody(
+        required: true,
+        content: new OA\JsonContent(
+            required: ['email', 'password', 'firstName', 'lastName'],
+            properties: [
+                new OA\Property(property: 'email', type: 'string', format: 'email'),
+                new OA\Property(property: 'password', type: 'string', format: 'password'),
+                new OA\Property(property: 'firstName', type: 'string'),
+                new OA\Property(property: 'lastName', type: 'string'),
+                new OA\Property(property: 'phone', type: 'string'),
+                new OA\Property(property: 'userType', type: 'string', enum: ['particular', 'professional'])
+            ]
+        )
+    )]
+    #[OA\Response(
+        response: 201,
+        description: 'Utilisateur créé avec succès'
+    )]
     public function create(
         Request $request,
         EntityManagerInterface $em,

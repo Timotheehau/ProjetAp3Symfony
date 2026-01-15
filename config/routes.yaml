@@ -14,3 +14,14 @@ api_register:
     path: /api/register
     methods: ['POST']
     controller: App\Controller\AuthController::register
+
+# Documentation API Swagger
+app.swagger_ui:
+    path: /api/doc
+    methods: GET
+    defaults: { _controller: nelmio_api_doc.controller.swagger_ui }
+
+app.swagger:
+    path: /api/doc.json
+    methods: GET
+    defaults: { _controller: nelmio_api_doc.controller.swagger }
