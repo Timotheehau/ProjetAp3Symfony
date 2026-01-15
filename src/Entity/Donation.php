@@ -13,11 +13,7 @@ class Donation
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
-    private ?int $id = null {
-        get {
-            return $this->id;
-        }
-    }
+    private ?int $id = null;
 
     #[ORM\ManyToOne(inversedBy: 'donations')]
     #[ORM\JoinColumn(nullable: false)]
@@ -56,6 +52,11 @@ class Donation
     public function __construct()
     {
         $this->createdAt = new \DateTimeImmutable();
+    }
+
+    public function getId(): ?int
+    {
+        return $this->id;
     }
 
     public function getUser(): ?User
