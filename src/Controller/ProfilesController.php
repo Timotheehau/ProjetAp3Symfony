@@ -61,49 +61,58 @@ class ProfilesController extends AbstractController
     )]
     public function list(Request $request, ProfileRepository $profileRepository): JsonResponse
     {
-        $sportId = $request->query->get('sportId');
-        $city = $request->query->get('city');
+        try {
+            $sportId = $request->query->get('sportId');
+            $city = $request->query->get('city');
 
-        $queryBuilder = $profileRepository->createQueryBuilder('p');
+            $queryBuilder = $profileRepository->createQueryBuilder('p');
 
-        if ($sportId) {
-            $queryBuilder
-                ->join('p.sports', 's')
-                ->andWhere('s.id = :sportId')
-                ->setParameter('sportId', $sportId);
+            if ($sportId) {
+                $queryBuilder
+                    ->join('p.sports', 's')
+                    ->andWhere('s.id = :sportId')
+                    ->setParameter('sportId', $sportId);
+            }
+
+            if ($city) {
+                $queryBuilder
+                    ->andWhere('p.city = :city')
+                    ->setParameter('city', $city);
+            }
+
+            $profiles = $queryBuilder->getQuery()->getResult();
+
+            $data = array_map(function($profile) {
+                return [
+                    'id' => $profile->getId(),
+                    'specialty' => $profile->getSpecialty(),
+                    'level' => $profile->getLevel(),
+                    'bio' => $profile->getBio(),
+                    'yearsOfExperience' => $profile->getYearsOfExperience(),
+                    'hourlyRate' => $profile->getHourlyRate(),
+                    'city' => $profile->getCity(),
+                    'averageRating' => $profile->getAverageRating(),
+                    'totalReviews' => $profile->getTotalReviews(),
+                    'isVerified' => $profile->getIsVerified(), // ← CORRECTION ICI
+                    'user' => [
+                        'firstName' => $profile->getUser()->getFirstName(),
+                        'lastName' => $profile->getUser()->getLastName(),
+                    ],
+                ];
+            }, $profiles);
+
+            return $this->json([
+                'success' => true,
+                'data' => $data
+            ]);
+
+        } catch (\Exception $e) {
+            return $this->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
-
-        if ($city) {
-            $queryBuilder
-                ->andWhere('p.city = :city')
-                ->setParameter('city', $city);
-        }
-
-        $profiles = $queryBuilder->getQuery()->getResult();
-
-        $data = array_map(function($profile) {
-            return [
-                'id' => $profile->getId(),
-                'specialty' => $profile->getSpecialty(),
-                'level' => $profile->getLevel(),
-                'bio' => $profile->getBio(),
-                'yearsOfExperience' => $profile->getYearsOfExperience(),
-                'hourlyRate' => $profile->getHourlyRate(),
-                'city' => $profile->getCity(),
-                'averageRating' => $profile->getAverageRating(),
-                'totalReviews' => $profile->getTotalReviews(),
-                'isVerified' => $profile->isVerified(),
-                'user' => [
-                    'firstName' => $profile->getUser()->getFirstName(),
-                    'lastName' => $profile->getUser()->getLastName(),
-                ],
-            ];
-        }, $profiles);
-
-        return $this->json([
-            'success' => true,
-            'data' => $data
-        ]);
     }
 
     #[Route('/{id}', name: 'profiles_show', methods: ['GET'])]
@@ -123,7 +132,7 @@ class ProfilesController extends AbstractController
     public function show(int $id, ProfileRepository $profileRepository): JsonResponse
     {
         $profile = $profileRepository->find($id);
-        
+
         if (!$profile) {
             return $this->json([
                 'success' => false,
@@ -148,7 +157,7 @@ class ProfilesController extends AbstractController
                 'diplomas' => $profile->getDiplomas(),
                 'averageRating' => $profile->getAverageRating(),
                 'totalReviews' => $profile->getTotalReviews(),
-                'isVerified' => $profile->isVerified(),
+                'isVerified' => $profile->getIsVerified(),
                 'user' => [
                     'id' => $profile->getUser()->getId(),
                     'firstName' => $profile->getUser()->getFirstName(),
