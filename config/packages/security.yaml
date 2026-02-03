@@ -13,48 +13,31 @@ security:
             pattern: ^/(_(profiler|wdt)|css|images|js)/
             security: false
 
-        # Refresh token AVANT les autres routes API
-        refresh:
-            pattern: ^/api/token/refresh
-            stateless: true
-            security: false
-
-        login:
-            pattern: ^/api/login
-            stateless: true
-            json_login:
-                check_path: /api/login
-                success_handler: lexik_jwt_authentication.handler.authentication_success
-                failure_handler: lexik_jwt_authentication.handler.authentication_failure
-
-        register:
-            pattern: ^/api/register
-            stateless: true
-            security: false
-
-        doc:
-            pattern: ^/api/doc
+        public:
+            pattern: ^/api/(login|register|token/refresh|doc)
             stateless: true
             security: false
 
         api:
             pattern: ^/api
             stateless: true
+            entry_point: jwt
             jwt: ~
-
-        main:
+            # Permettre l'accès anonyme
             lazy: true
-            provider: app_user_provider
 
     access_control:
         - { path: ^/api/login, roles: PUBLIC_ACCESS }
         - { path: ^/api/register, roles: PUBLIC_ACCESS }
         - { path: ^/api/token/refresh, roles: PUBLIC_ACCESS }
         - { path: ^/api/doc, roles: PUBLIC_ACCESS }
-        - { path: ^/api/sports, roles: PUBLIC_ACCESS, methods: [GET] }
-        - { path: ^/api/profiles, roles: PUBLIC_ACCESS, methods: [GET] }
-        - { path: ^/api/venues, roles: PUBLIC_ACCESS, methods: [GET] }
-        - { path: ^/api/reviews, roles: PUBLIC_ACCESS, methods: [GET] }
+
+        # Routes publiques en GET
+        - { path: ^/api/sports$, roles: PUBLIC_ACCESS, methods: [ GET ] }
+        - { path: ^/api/profiles, roles: PUBLIC_ACCESS, methods: [ GET ] }
+        - { path: ^/api/venues, roles: PUBLIC_ACCESS, methods: [ GET ] }
+        - { path: ^/api/reviews, roles: PUBLIC_ACCESS, methods: [ GET ] }
+
         - { path: ^/api/admin, roles: ROLE_ADMIN }
         - { path: ^/api, roles: ROLE_USER }
 
