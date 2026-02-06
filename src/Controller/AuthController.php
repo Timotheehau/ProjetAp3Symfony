@@ -247,8 +247,9 @@ class AuthController extends AbstractController
     public function me(): JsonResponse
     {
         $user = $this->getUser();
-        
-        if (!$user) {
+
+        // Ensure the returned user is an instance of our User entity
+        if (!$user instanceof User) {
             return $this->json([
                 'success' => false,
                 'message' => 'Non authentifié'
