@@ -5,15 +5,9 @@ controllers:
         namespace: App\Controller
     type: attribute
 
-# Routes spécifiques (si nécessaire)
-api_login:
+api_login_check:
     path: /api/login
-    methods: ['POST']
-
-api_register:
-    path: /api/register
-    methods: ['POST']
-    controller: App\Controller\AuthController::register
+    methods: [POST]
 
 # Documentation API Swagger
 app.swagger_ui:

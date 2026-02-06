@@ -13,17 +13,21 @@ security:
             pattern: ^/(_(profiler|wdt)|css|images|js)/
             security: false
 
-        public:
-            pattern: ^/api/(login|register|token/refresh|doc)
+        login:
+            pattern: ^/api/login
             stateless: true
-            security: false
+            json_login:
+                check_path: /api/login
+                username_path: email
+                password_path: password
+                success_handler: lexik_jwt_authentication.handler.authentication_success
+                failure_handler: lexik_jwt_authentication.handler.authentication_failure
 
         api:
             pattern: ^/api
             stateless: true
             entry_point: jwt
             jwt: ~
-            # Permettre l'accès anonyme
             lazy: true
 
     access_control:
