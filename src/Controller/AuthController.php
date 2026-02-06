@@ -84,7 +84,7 @@ class AuthController extends AbstractController
         $user->setLastName($data['lastName']);
         $user->setPhone($data['phone'] ?? null);
         $user->setUserType($data['userType'] ?? 'particular');
-        
+
         $hashedPassword = $passwordHasher->hashPassword($user, $data['password']);
         $user->setPassword($hashedPassword);
 
@@ -197,10 +197,10 @@ class AuthController extends AbstractController
         $newRefreshToken->setExpiresAt((new \DateTime())->modify('+30 days'));
 
         $em->persist($newRefreshToken);
-        
+
         // Supprimer l'ancien refresh token
         $em->remove($refreshToken);
-        
+
         $em->flush();
 
         return $this->json([
@@ -235,7 +235,7 @@ class AuthController extends AbstractController
                             property: 'roles',
                             type: 'array',
                             items: new OA\Items(type: 'string'),
-                            example: ['ROLE_USER']
+                            example: ['Utilisateur']
                         )
                     ],
                     type: 'object'
@@ -267,6 +267,26 @@ class AuthController extends AbstractController
                 'userType' => $user->getUserType(),
                 'roles' => $user->getRoles()
             ]
+        ]);
+    }
+    #[Route('/api/me/delete', name: 'api_me_delete', methods: ['DELETE'])]
+    public function deleteAccount(EntityManagerInterface $em): JsonResponse
+    {
+        $user = $this->getUser();
+
+        if (!$user) {
+            return $this->json(['message' => 'Utilisateur non trouvé'], Response::HTTP_NOT_FOUND);
+        }
+
+        // Optionnel : Supprimer manuellement les tokens liés si nécessaire
+        // Mais Doctrine s'en occupe si tu as mis "onDelete: CASCADE"
+
+        $em->remove($user);
+        $em->flush();
+
+        return $this->json([
+            'success' => true,
+            'message' => 'Compte supprimé avec succès'
         ]);
     }
 }
