@@ -3,7 +3,10 @@
 namespace App\Controller;
 
 use App\Entity\User;
+use App\Entity\Profile;
+use App\Entity\Sport;
 use App\Entity\RefreshToken;
+use App\Repository\SportRepository;
 use App\Repository\RefreshTokenRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -33,42 +36,31 @@ class AuthController extends AbstractController
     #[OA\RequestBody(
         required: true,
         content: new OA\JsonContent(
-            required: ['email', 'password', 'firstName', 'lastName'],
+            required: ['email', 'password', 'firstName', 'lastName', 'userType'],
             properties: [
                 new OA\Property(property: 'email', type: 'string', format: 'email', example: 'user@example.com'),
                 new OA\Property(property: 'password', type: 'string', format: 'password', example: 'Password123!'),
                 new OA\Property(property: 'firstName', type: 'string', example: 'John'),
                 new OA\Property(property: 'lastName', type: 'string', example: 'Doe'),
                 new OA\Property(property: 'phone', type: 'string', example: '0612345678', nullable: true),
-                new OA\Property(property: 'userType', type: 'string', enum: ['particular', 'professional'], example: 'particular')
+                new OA\Property(property: 'userType', type: 'string', enum: ['particular', 'professional'], example: 'particular'),
+                new OA\Property(property: 'specialty', type: 'string', example: 'Yoga'),
+                new OA\Property(property: 'city', type: 'string', example: 'Paris')
             ]
         )
     )]
-    #[OA\Response(
-        response: 201,
-        description: 'Utilisateur créé avec succès',
-        content: new OA\JsonContent(
-            properties: [
-                new OA\Property(property: 'success', type: 'boolean', example: true),
-                new OA\Property(property: 'message', type: 'string', example: 'Utilisateur créé avec succès'),
-                new OA\Property(
-                    property: 'data',
-                    properties: [
-                        new OA\Property(property: 'id', type: 'integer', example: 1),
-                        new OA\Property(property: 'email', type: 'string', example: 'user@example.com')
-                    ],
-                    type: 'object'
-                )
-            ]
-        )
-    )]
-    #[OA\Response(response: 400, description: 'Email déjà utilisé ou données invalides')]
     public function register(
-        Request $request,
-        EntityManagerInterface $em,
+        Request                     $request,
+        EntityManagerInterface      $em,
         UserPasswordHasherInterface $passwordHasher
-    ): JsonResponse {
+    ): JsonResponse
+    {
         $data = json_decode($request->getContent(), true);
+
+        // Validation basique
+        if (!isset($data['email'], $data['password'], $data['firstName'], $data['lastName'])) {
+            return $this->json(['success' => false, 'message' => 'Données manquantes'], Response::HTTP_BAD_REQUEST);
+        }
 
         $existingUser = $em->getRepository(User::class)->findOneBy(['email' => $data['email']]);
         if ($existingUser) {
@@ -83,7 +75,38 @@ class AuthController extends AbstractController
         $user->setFirstName($data['firstName']);
         $user->setLastName($data['lastName']);
         $user->setPhone($data['phone'] ?? null);
-        $user->setUserType($data['userType'] ?? 'particular');
+
+        $userType = $data['userType'] ?? 'particular';
+        $user->setUserType($userType);
+
+        if ($userType === 'professional') {
+            $profile = new Profile();
+
+            // On récupère les données envoyées par ton nouveau formulaire React
+            $profile->setSpecialty($data['specialty'] ?? 'Non spécifiée');
+            $profile->setCity($data['city'] ?? 'Non renseignée');
+
+            // Valeurs par défaut pour les colonnes NOT NULL restantes
+            $profile->setLevel('Débutant');
+            $profile->setYearsOfExperience(0);
+            $profile->setTotalReviews(0);
+            $profile->setIsVerified(false);
+            $profile->setIsActive(true);
+            $profile->setCreatedAt(new \DateTimeImmutable());
+            $profile->setUpdatedAt(new \DateTimeImmutable());
+
+            if (isset($data['sports']) && is_array($data['sports'])) {
+                foreach ($data['sports'] as $sportId) {
+                    $sport = $em->getRepository(Sport::class)->find($sportId);
+                    if ($sport) {
+                        $profile->addSport($sport);
+                    }
+                }
+            }
+
+            $user->setProfile($profile);
+            $em->persist($profile);
+        }
 
         $hashedPassword = $passwordHasher->hashPassword($user, $data['password']);
         $user->setPassword($hashedPassword);
@@ -97,6 +120,7 @@ class AuthController extends AbstractController
             'data' => [
                 'id' => $user->getId(),
                 'email' => $user->getEmail(),
+                'type' => $user->getUserType()
             ]
         ], Response::HTTP_CREATED);
     }
@@ -162,10 +186,11 @@ class AuthController extends AbstractController
     )]
     #[OA\Response(response: 401, description: 'Refresh token invalide ou expiré')]
     public function refresh(
-        Request $request,
+        Request                $request,
         RefreshTokenRepository $refreshTokenRepository,
         EntityManagerInterface $em
-    ): JsonResponse {
+    ): JsonResponse
+    {
         $data = json_decode($request->getContent(), true);
         $refreshTokenString = $data['refresh_token'] ?? null;
 
@@ -194,7 +219,7 @@ class AuthController extends AbstractController
         $newRefreshToken = new RefreshToken();
         $newRefreshToken->setToken(bin2hex(random_bytes(64)));
         $newRefreshToken->setUser($user);
-        $newRefreshToken->setExpiresAt((new \DateTime())->modify('+30 days'));
+        $newRefreshToken->setExpiresAt((new \DateTimeImmutable())->modify('+30 days'));
 
         $em->persist($newRefreshToken);
 
@@ -210,65 +235,58 @@ class AuthController extends AbstractController
     }
 
     #[Route('/api/me', name: 'api_me', methods: ['GET'])]
-    #[OA\Get(
-        path: '/api/me',
-        summary: 'Obtenir les informations de l\'utilisateur connecté',
-        security: [['Bearer' => []]],
-        tags: ['Authentication']
-    )]
-    #[OA\Response(
-        response: 200,
-        description: 'Informations utilisateur',
-        content: new OA\JsonContent(
-            properties: [
-                new OA\Property(property: 'success', type: 'boolean', example: true),
-                new OA\Property(
-                    property: 'user',
-                    properties: [
-                        new OA\Property(property: 'id', type: 'integer', example: 1),
-                        new OA\Property(property: 'email', type: 'string', example: 'user@example.com'),
-                        new OA\Property(property: 'firstName', type: 'string', example: 'John'),
-                        new OA\Property(property: 'lastName', type: 'string', example: 'Doe'),
-                        new OA\Property(property: 'phone', type: 'string', example: '0612345678'),
-                        new OA\Property(property: 'userType', type: 'string', example: 'particular'),
-                        new OA\Property(
-                            property: 'roles',
-                            type: 'array',
-                            items: new OA\Items(type: 'string'),
-                            example: ['Utilisateur']
-                        )
-                    ],
-                    type: 'object'
-                )
-            ]
-        )
-    )]
-    #[OA\Response(response: 401, description: 'Non authentifié')]
     public function me(): JsonResponse
     {
         $user = $this->getUser();
+        if (!$user) {
+            return $this->json(['message' => 'Non authentifié'], 401);
+        }
 
-        // Ensure the returned user is an instance of our User entity
-        if (!$user instanceof User) {
-            return $this->json([
-                'success' => false,
-                'message' => 'Non authentifié'
-            ], Response::HTTP_UNAUTHORIZED);
+        // On prépare les sports du User (Particulier)
+        $userSports = [];
+        foreach ($user->getSports() as $sport) {
+            $userSports[] = [
+                'id' => $sport->getId(),
+                'name' => $sport->getName(),
+                'icon' => $sport->getIcon()
+            ];
+        }
+
+        // On prépare les infos du Profile (Coach)
+        $profileData = null;
+        if ($user->getUserType() === 'professional' && $user->getProfile()) {
+            $profile = $user->getProfile();
+            $profileSports = [];
+            foreach ($profile->getSports() as $sport) {
+                $profileSports[] = [
+                    'id' => $sport->getId(),
+                    'name' => $sport->getName(),
+                    'icon' => $sport->getIcon()
+                ];
+            }
+
+            $profileData = [
+                'id' => $profile->getId(),
+                'city' => $profile->getCity(),
+                'bio' => $profile->getBio(),
+                'sports' => $profileSports, // Sports spécifiques au profil pro
+            ];
         }
 
         return $this->json([
-            'success' => true,
-            'user' => [
-                'id' => $user->getId(),
-                'email' => $user->getEmail(),
-                'firstName' => $user->getFirstName(),
-                'lastName' => $user->getLastName(),
-                'phone' => $user->getPhone(),
-                'userType' => $user->getUserType(),
-                'roles' => $user->getRoles()
-            ]
+            'id' => $user->getId(),
+            'email' => $user->getEmail(),
+            'firstName' => $user->getFirstName(),
+            'lastName' => $user->getLastName(),
+            'phone' => $user->getPhone(),
+            'userType' => $user->getUserType(),
+            'roles' => $user->getRoles(),
+            'createdAt' => $user->getCreatedAt(),
+            'sports' => $userSports, // Sports rattachés directement au User (Particulier)
+            'profile' => $profileData
         ]);
     }
+
     #[Route('/api/me/delete', name: 'api_me_delete', methods: ['DELETE'])]
     public function deleteAccount(EntityManagerInterface $em): JsonResponse
     {
@@ -288,5 +306,61 @@ class AuthController extends AbstractController
             'success' => true,
             'message' => 'Compte supprimé avec succès'
         ]);
+    }
+
+    // src/Controller/AuthController.php
+
+    #[Route('/api/me/update', name: 'api_profile_update', methods: ['PUT'])]
+    public function updateProfile(
+        Request $request,
+        EntityManagerInterface $em,
+        SportRepository $sportRepo
+    ): JsonResponse {
+        $user = $this->getUser();
+        $data = json_decode($request->getContent(), true);
+
+        // 1. Mise à jour des infos de base (Table User)
+        $user->setFirstName($data['firstName'] ?? $user->getFirstName());
+        $user->setLastName($data['lastName'] ?? $user->getLastName());
+        $user->setPhone($data['phone'] ?? $user->getPhone());
+        $user->setUpdatedAt(new \DateTimeImmutable());
+
+        // 2. Gestion des Sports (Table de liaison user_sport)
+        if (isset($data['sports']) && is_array($data['sports'])) {
+            // On vide les sports actuels
+            foreach ($user->getSports() as $sport) {
+                $user->removeSport($sport);
+            }
+
+            // On ajoute les nouveaux sports sélectionnés
+            foreach ($data['sports'] as $sportData) {
+                $sport = $sportRepo->find($sportData['id']);
+                if ($sport) {
+                    $user->addSport($sport);
+                }
+            }
+        }
+
+        // 3. Gestion spécifique au profil Pro (si applicable)
+        if ($user->getUserType() === 'professional' && $user->getProfile()) {
+            $profile = $user->getProfile();
+            $profileData = $data['profile'] ?? [];
+
+            $profile->setCity($profileData['city'] ?? $profile->getCity());
+            $profile->setBio($profileData['bio'] ?? $profile->getBio());
+
+            // Si tu stockes AUSSI les sports dans Profile pour les pros :
+            if (isset($profileData['sports'])) {
+                foreach ($profile->getSports() as $s) $profile->removeSport($s);
+                foreach ($profileData['sports'] as $sData) {
+                    $s = $sportRepo->find($sData['id']);
+                    if ($s) $profile->addSport($s);
+                }
+            }
+        }
+
+        $em->flush();
+
+        return $this->json(['success' => true, 'message' => 'Profil mis à jour']);
     }
 }

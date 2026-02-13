@@ -39,10 +39,6 @@ class Profile
     #[Assert\PositiveOrZero(message: 'L\'expérience doit être positive')]
     private int $yearsOfExperience = 0;
 
-    #[ORM\Column(type: Types::DECIMAL, precision: 10, scale: 2, nullable: true)]
-    #[Assert\Positive(message: 'Le tarif horaire doit être positif')]
-    private ?string $hourlyRate = null;
-
     #[ORM\Column(length: 100)]
     #[Assert\NotBlank(message: 'La ville est obligatoire')]
     private ?string $city = null;
@@ -174,17 +170,6 @@ class Profile
     public function setYearsOfExperience(int $yearsOfExperience): static
     {
         $this->yearsOfExperience = $yearsOfExperience;
-        return $this;
-    }
-
-    public function getHourlyRate(): ?string
-    {
-        return $this->hourlyRate;
-    }
-
-    public function setHourlyRate(?string $hourlyRate): static
-    {
-        $this->hourlyRate = $hourlyRate;
         return $this;
     }
 

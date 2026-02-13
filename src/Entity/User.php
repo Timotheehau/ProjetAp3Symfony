@@ -2,6 +2,7 @@
 
 namespace App\Entity;
 
+use App\Entity\Sport;
 use App\Repository\UserRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
@@ -78,12 +79,17 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\OneToMany(mappedBy: 'user', targetEntity: ReviewLike::class)]
     private Collection $reviewLikes;
 
+    #[ORM\ManyToMany(targetEntity: Sport::class)]
+    #[ORM\JoinTable(name: 'user_sport')]
+    private Collection $sports;
+
     public function __construct()
     {
         $this->bookings = new ArrayCollection();
         $this->reviews = new ArrayCollection();
         $this->donations = new ArrayCollection();
         $this->reviewLikes = new ArrayCollection();
+        $this->sports = new ArrayCollection();
         $this->createdAt = new \DateTimeImmutable();
     }
 
@@ -201,7 +207,27 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         $this->isActive = $isActive;
         return $this;
     }
+    /**
+     * @return Collection<int, Sport>
+     */
+    public function getSports(): Collection
+    {
+        return $this->sports;
+    }
 
+    public function addSport(Sport $sport): static
+    {
+        if (!$this->sports->contains($sport)) {
+            $this->sports->add($sport);
+        }
+        return $this;
+    }
+
+    public function removeSport(Sport $sport): static
+    {
+        $this->sports->removeElement($sport);
+        return $this;
+    }
     public function getCreatedAt(): ?\DateTimeImmutable
     {
         return $this->createdAt;
