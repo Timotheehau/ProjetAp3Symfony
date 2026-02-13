@@ -52,7 +52,8 @@ class AuthController extends AbstractController
     public function register(
         Request                     $request,
         EntityManagerInterface      $em,
-        UserPasswordHasherInterface $passwordHasher
+        UserPasswordHasherInterface $passwordHasher,
+        SportRepository $sportRepo
     ): JsonResponse
     {
         $data = json_decode($request->getContent(), true);
@@ -78,7 +79,17 @@ class AuthController extends AbstractController
 
         $userType = $data['userType'] ?? 'particular';
         $user->setUserType($userType);
-
+        if ($userType === 'particular') {
+            // Cas du SPORTIF : On enregistre les sports directement sur l'User
+            if (isset($data['sports']) && is_array($data['sports'])) {
+                foreach ($data['sports'] as $sportId) {
+                    $sport = $sportRepo->find($sportId);
+                    if ($sport) {
+                        $user->addSport($sport);
+                    }
+                }
+            }
+        }
         if ($userType === 'professional') {
             $profile = new Profile();
 
@@ -107,6 +118,7 @@ class AuthController extends AbstractController
             $user->setProfile($profile);
             $em->persist($profile);
         }
+
 
         $hashedPassword = $passwordHasher->hashPassword($user, $data['password']);
         $user->setPassword($hashedPassword);
@@ -269,7 +281,7 @@ class AuthController extends AbstractController
                 'id' => $profile->getId(),
                 'city' => $profile->getCity(),
                 'bio' => $profile->getBio(),
-                'sports' => $profileSports, // Sports spécifiques au profil pro
+                'sports' => $profileSports,
             ];
         }
 
@@ -281,7 +293,9 @@ class AuthController extends AbstractController
             'phone' => $user->getPhone(),
             'userType' => $user->getUserType(),
             'roles' => $user->getRoles(),
-            'createdAt' => $user->getCreatedAt(),
+            'isActive' => $user->isActive(),
+            'createdAt' => $user->getCreatedAt() ? $user->getCreatedAt()->format(\DateTimeInterface::ATOM) : null,
+            'updatedAt' => $user->getUpdatedAt() ? $user->getUpdatedAt()->format(\DateTimeInterface::ATOM) : null,
             'sports' => $userSports, // Sports rattachés directement au User (Particulier)
             'profile' => $profileData
         ]);
