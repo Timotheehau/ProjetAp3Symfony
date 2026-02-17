@@ -18,6 +18,8 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface;
 use OpenApi\Attributes as OA;
 
+// ... (garder tes imports inchangés)
+
 class AuthController extends AbstractController
 {
     private JWTTokenManagerInterface $jwtManager;
@@ -30,45 +32,54 @@ class AuthController extends AbstractController
     #[Route('/api/register', name: 'api_register', methods: ['POST'])]
     #[OA\Post(
         path: '/api/register',
-        summary: 'Créer un nouveau compte utilisateur',
+        summary: 'Créer un nouveau compte utilisateur avec documents',
         tags: ['Authentication']
     )]
     #[OA\RequestBody(
         required: true,
-        content: new OA\JsonContent(
-            required: ['email', 'password', 'firstName', 'lastName', 'userType'],
-            properties: [
-                new OA\Property(property: 'email', type: 'string', format: 'email', example: 'user@example.com'),
-                new OA\Property(property: 'password', type: 'string', format: 'password', example: 'Password123!'),
-                new OA\Property(property: 'firstName', type: 'string', example: 'John'),
-                new OA\Property(property: 'lastName', type: 'string', example: 'Doe'),
-                new OA\Property(property: 'phone', type: 'string', example: '0612345678', nullable: true),
-                new OA\Property(property: 'userType', type: 'string', enum: ['particular', 'professional'], example: 'particular'),
-                new OA\Property(property: 'specialty', type: 'string', example: 'Yoga'),
-                new OA\Property(property: 'city', type: 'string', example: 'Paris')
-            ]
+        content: new OA\MediaType(
+            mediaType: 'multipart/form-data',
+            schema: new OA\Schema(
+                required: ['email', 'password', 'firstName', 'lastName', 'userType'],
+                properties: [
+                    new OA\Property(property: 'email', type: 'string', format: 'email'),
+                    new OA\Property(property: 'password', type: 'string', format: 'password'),
+                    new OA\Property(property: 'firstName', type: 'string'),
+                    new OA\Property(property: 'lastName', type: 'string'),
+                    new OA\Property(property: 'userType', type: 'string', enum: ['particular', 'professional']),
+                    new OA\Property(property: 'phone', type: 'string', nullable: true),
+                    new OA\Property(property: 'city', type: 'string', nullable: true),
+                    new OA\Property(property: 'level', type: 'string', nullable: true),
+                    new OA\Property(property: 'years_of_experience', type: 'integer', nullable: true),
+                    new OA\Property(property: 'sports', type: 'string', description: 'JSON array stringified [1,2]'),
+                    new OA\Property(property: 'diplomas', type: 'string', format: 'binary'),
+                    new OA\Property(property: 'certifications', type: 'string', format: 'binary')
+                ]
+            )
         )
     )]
     public function register(
         Request                     $request,
         EntityManagerInterface      $em,
         UserPasswordHasherInterface $passwordHasher,
-        SportRepository $sportRepo
+        SportRepository             $sportRepo
     ): JsonResponse
     {
-        $data = json_decode($request->getContent(), true);
+        // 1. Récupération des données via Request (POST standard / FormData)
+        $data = $request->request->all();
 
-        // Validation basique
+        // 2. Récupération des fichiers binaires
+        $diplomaFile = $request->files->get('diplomas');
+        $certifFile = $request->files->get('certifications');
+
+        // Validation minimale
         if (!isset($data['email'], $data['password'], $data['firstName'], $data['lastName'])) {
-            return $this->json(['success' => false, 'message' => 'Données manquantes'], Response::HTTP_BAD_REQUEST);
+            return $this->json(['success' => false, 'message' => 'Données obligatoires manquantes'], Response::HTTP_BAD_REQUEST);
         }
 
         $existingUser = $em->getRepository(User::class)->findOneBy(['email' => $data['email']]);
         if ($existingUser) {
-            return $this->json([
-                'success' => false,
-                'message' => 'Un utilisateur avec cet email existe déjà'
-            ], Response::HTTP_BAD_REQUEST);
+            return $this->json(['success' => false, 'message' => 'Un utilisateur avec cet email existe déjà'], Response::HTTP_BAD_REQUEST);
         }
 
         $user = new User();
@@ -76,49 +87,62 @@ class AuthController extends AbstractController
         $user->setFirstName($data['firstName']);
         $user->setLastName($data['lastName']);
         $user->setPhone($data['phone'] ?? null);
+        $user->setCreatedAt(new \DateTimeImmutable());
+        $user->setUpdatedAt(new \DateTimeImmutable());
 
         $userType = $data['userType'] ?? 'particular';
         $user->setUserType($userType);
+
+        // 3. Gestion des Sports (on décode la chaîne JSON envoyée par le front)
+        $sportsData = $data['sports'] ?? '[]';
+        $sportIds = is_array($sportsData) ? $sportsData : json_decode($sportsData, true);
+
         if ($userType === 'particular') {
-            // Cas du SPORTIF : On enregistre les sports directement sur l'User
-            if (isset($data['sports']) && is_array($data['sports'])) {
-                foreach ($data['sports'] as $sportId) {
+            if (is_array($sportIds)) {
+                foreach ($sportIds as $sportId) {
                     $sport = $sportRepo->find($sportId);
-                    if ($sport) {
-                        $user->addSport($sport);
-                    }
+                    if ($sport) $user->addSport($sport);
                 }
             }
         }
+
         if ($userType === 'professional') {
             $profile = new Profile();
-
-            // On récupère les données envoyées par ton nouveau formulaire React
-            $profile->setSpecialty($data['specialty'] ?? 'Non spécifiée');
             $profile->setCity($data['city'] ?? 'Non renseignée');
+            $profile->setLevel($data['level'] ?? 'Débutant');
+            $profile->setYearsOfExperience((int)($data['years_of_experience'] ?? 0));
+            $profile->setSpecialty('Coach Sportif');
 
-            // Valeurs par défaut pour les colonnes NOT NULL restantes
-            $profile->setLevel('Débutant');
-            $profile->setYearsOfExperience(0);
+            // Stats & Sécurité par défaut
             $profile->setTotalReviews(0);
             $profile->setIsVerified(false);
             $profile->setIsActive(true);
             $profile->setCreatedAt(new \DateTimeImmutable());
             $profile->setUpdatedAt(new \DateTimeImmutable());
 
-            if (isset($data['sports']) && is_array($data['sports'])) {
-                foreach ($data['sports'] as $sportId) {
-                    $sport = $em->getRepository(Sport::class)->find($sportId);
-                    if ($sport) {
-                        $profile->addSport($sport);
-                    }
+            // 4. Traitement des fichiers (Upload)
+            if ($diplomaFile) {
+                $newDiplomaName = uniqid('dip_').'.'.$diplomaFile->guessExtension();
+                $diplomaFile->move($this->getParameter('uploads_directory'), $newDiplomaName);
+                $profile->setDiplomas($newDiplomaName);
+            }
+
+            if ($certifFile) {
+                $newCertName = uniqid('cert_').'.'.$certifFile->guessExtension();
+                $certifFile->move($this->getParameter('uploads_directory'), $newCertName);
+                $profile->setCertifications($newCertName);
+            }
+
+            if (is_array($sportIds)) {
+                foreach ($sportIds as $sportId) {
+                    $sport = $sportRepo->find($sportId);
+                    if ($sport) $profile->addSport($sport);
                 }
             }
 
             $user->setProfile($profile);
             $em->persist($profile);
         }
-
 
         $hashedPassword = $passwordHasher->hashPassword($user, $data['password']);
         $user->setPassword($hashedPassword);
@@ -129,11 +153,7 @@ class AuthController extends AbstractController
         return $this->json([
             'success' => true,
             'message' => 'Utilisateur créé avec succès',
-            'data' => [
-                'id' => $user->getId(),
-                'email' => $user->getEmail(),
-                'type' => $user->getUserType()
-            ]
+            'data' => ['id' => $user->getId()]
         ], Response::HTTP_CREATED);
     }
 

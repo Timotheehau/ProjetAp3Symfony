@@ -55,10 +55,10 @@ class Profile
     private ?string $longitude = null;
 
     #[ORM\Column(type: Types::JSON, nullable: true)]
-    private ?array $certifications = null;
+    private ?string $certifications = null;
 
     #[ORM\Column(type: Types::JSON, nullable: true)]
-    private ?array $diplomas = null;
+    private ?string $diplomas = null;
 
     #[ORM\Column(type: Types::DECIMAL, precision: 3, scale: 2, nullable: true)]
     private ?string $averageRating = null;
@@ -222,7 +222,7 @@ class Profile
         return $this->certifications;
     }
 
-    public function setCertifications(?array $certifications): static
+    public function setCertifications(?string $certifications): static
     {
         $this->certifications = $certifications;
         return $this;
@@ -233,7 +233,7 @@ class Profile
         return $this->diplomas;
     }
 
-    public function setDiplomas(?array $diplomas): static
+    public function setDiplomas(?string $diplomas): static
     {
         $this->diplomas = $diplomas;
         return $this;
