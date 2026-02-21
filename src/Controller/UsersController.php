@@ -39,6 +39,7 @@ class UsersController extends AbstractController
                             new OA\Property(property: 'email', type: 'string', example: 'user@example.com'),
                             new OA\Property(property: 'firstName', type: 'string', example: 'John'),
                             new OA\Property(property: 'lastName', type: 'string', example: 'Doe'),
+                            new OA\Property(property: 'city', type: 'string', example: 'Paris'),
                             new OA\Property(property: 'phone', type: 'string', example: '0612345678'),
                             new OA\Property(property: 'userType', type: 'string', example: 'particular')
                         ],
@@ -51,18 +52,19 @@ class UsersController extends AbstractController
     public function list(UserRepository $userRepository): JsonResponse
     {
         $users = $userRepository->findAll();
-        
+
         $data = array_map(function($user) {
             return [
                 'id' => $user->getId(),
                 'email' => $user->getEmail(),
                 'firstName' => $user->getFirstName(),
                 'lastName' => $user->getLastName(),
+                'city' => $user->getCity(),
                 'phone' => $user->getPhone(),
                 'userType' => $user->getUserType(),
             ];
         }, $users);
-        
+
         return $this->json([
             'success' => true,
             'data' => $data
@@ -94,7 +96,7 @@ class UsersController extends AbstractController
     public function show(int $id, UserRepository $userRepository): JsonResponse
     {
         $user = $userRepository->find($id);
-        
+
         if (!$user) {
             return $this->json([
                 'success' => false,
@@ -109,6 +111,7 @@ class UsersController extends AbstractController
                 'email' => $user->getEmail(),
                 'firstName' => $user->getFirstName(),
                 'lastName' => $user->getLastName(),
+                'city' => $user->getCity(),
                 'phone' => $user->getPhone(),
                 'userType' => $user->getUserType(),
             ]
@@ -131,6 +134,7 @@ class UsersController extends AbstractController
                 new OA\Property(property: 'password', type: 'string', format: 'password'),
                 new OA\Property(property: 'firstName', type: 'string'),
                 new OA\Property(property: 'lastName', type: 'string'),
+                new OA\Property(property: 'city', type: 'string', format: 'string'),
                 new OA\Property(property: 'phone', type: 'string'),
                 new OA\Property(property: 'userType', type: 'string', enum: ['particular', 'professional'])
             ]
@@ -151,9 +155,10 @@ class UsersController extends AbstractController
         $user->setEmail($data['email']);
         $user->setFirstName($data['firstName']);
         $user->setLastName($data['lastName']);
+        $user->setCity($data['city']);
         $user->setPhone($data['phone'] ?? null);
         $user->setUserType($data['userType'] ?? 'particular');
-        
+
         $hashedPassword = $passwordHasher->hashPassword($user, $data['password']);
         $user->setPassword($hashedPassword);
 

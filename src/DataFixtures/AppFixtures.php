@@ -88,7 +88,7 @@ class AppFixtures extends Fixture
         // ============================================
         $profiles = [];
         $cities = ['Paris', 'Lyon', 'Marseille', 'Toulouse', 'Nantes', 'Bordeaux', 'Lille'];
-        $specialties = ['coach', 'referee', 'health_specialist'];
+        $specialties = ['coach', 'arbitre', 'health_specialist'];
         $levels = ['pro', 'semi-pro', 'amateur'];
 
         for ($i = 1; $i <= 15; $i++) {
@@ -110,7 +110,6 @@ class AppFixtures extends Fixture
             $profile->setLevel($levels[array_rand($levels)]);
             $profile->setBio("Professionnel passionné avec {$i} ans d'expérience dans le domaine sportif. Diplômé d'État et certifié.");
             $profile->setYearsOfExperience($i);
-            $profile->setHourlyRate(30 + ($i * 5));
             $profile->setCity($cities[array_rand($cities)]);
             $profile->setAddress("{$i} Avenue du Sport");
             $profile->setLatitude((string)(48.8566 + (rand(-100, 100) / 100)));

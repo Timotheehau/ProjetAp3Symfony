@@ -44,6 +44,10 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[Assert\Length(min: 2, max: 100)]
     private ?string $lastName = null;
 
+    #[ORM\Column(length: 255, nullable: true)]
+    #[Assert\NotBlank(message: 'La ville est obligatoire')]
+    private ?string $city = null;
+
     #[ORM\Column(length: 20, nullable: true)]
     #[Assert\Regex(
         pattern: '/^[0-9+\s\-\(\)]+$/',
@@ -173,6 +177,17 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function getFullName(): string
     {
         return $this->firstName . ' ' . $this->lastName;
+    }
+
+    public function getCity(): ?string
+    {
+        return $this->city;
+    }
+
+    public function setCity(?string $city): static
+    {
+        $this->city = $city;
+        return $this;
     }
 
     public function getPhone(): ?string

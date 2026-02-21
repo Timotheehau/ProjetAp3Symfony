@@ -18,8 +18,6 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface;
 use OpenApi\Attributes as OA;
 
-// ... (garder tes imports inchangés)
-
 class AuthController extends AbstractController
 {
     private JWTTokenManagerInterface $jwtManager;
@@ -87,6 +85,7 @@ class AuthController extends AbstractController
         $user->setFirstName($data['firstName']);
         $user->setLastName($data['lastName']);
         $user->setPhone($data['phone'] ?? null);
+        $user->setCity($data['city']) ?? null;
         $user->setCreatedAt(new \DateTimeImmutable());
         $user->setUpdatedAt(new \DateTimeImmutable());
 
@@ -311,6 +310,7 @@ class AuthController extends AbstractController
             'firstName' => $user->getFirstName(),
             'lastName' => $user->getLastName(),
             'phone' => $user->getPhone(),
+            'city' => $user->getCity(),
             'userType' => $user->getUserType(),
             'roles' => $user->getRoles(),
             'isActive' => $user->isActive(),
@@ -357,6 +357,7 @@ class AuthController extends AbstractController
         $user->setFirstName($data['firstName'] ?? $user->getFirstName());
         $user->setLastName($data['lastName'] ?? $user->getLastName());
         $user->setPhone($data['phone'] ?? $user->getPhone());
+        $user->setCity($data['city'] ?? $user->getCity());
         $user->setUpdatedAt(new \DateTimeImmutable());
 
         // 2. Gestion des Sports (Table de liaison user_sport)
