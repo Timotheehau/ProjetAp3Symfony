@@ -3,6 +3,7 @@
 namespace App\Controller;
 
 use App\Repository\ProfileRepository;
+use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -112,6 +113,78 @@ class ProfilesController extends AbstractController
                 'message' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+    }
+    #[Route('/search', name: 'profiles_search', methods: ['GET'])]
+    public function search(Request $request, EntityManagerInterface $em): JsonResponse
+    {
+        try {
+            $sportId = $request->query->get('sportId');
+            // On force en float. Si c'est vide ou invalide, ça devient 0.0
+            $userLat = $request->query->get('lat') !== "" ? (float)$request->query->get('lat') : null;
+            $userLon = $request->query->get('lon') !== "" ? (float)$request->query->get('lon') : null;
+
+            $qb = $em->createQueryBuilder();
+
+            // On définit proprement les alias
+            $qb->select('p', 'u')
+                ->from('App\Entity\Profile', 'p')
+                ->innerJoin('p.user', 'u')
+                ->where('u.isActive = :active')
+                ->setParameter('active', true);
+
+            // Filtre par Sport : On n'ajoute la jointure QUE si nécessaire
+            if (!empty($sportId)) {
+                $qb->innerJoin('p.sports', 's') // Jointure seulement si on filtre
+                ->andWhere('s.id = :sportId')
+                    ->setParameter('sportId', $sportId);
+            }
+
+            $profiles = $qb->getQuery()->getResult();
+            $results = [];
+
+            foreach ($profiles as $profile) {
+                $distance = null;
+
+                // On ne calcule la distance QUE si on a des coordonnées valides (pas null et pas 0)
+                if ($userLat && $userLon && $profile->getLatitude() && $profile->getLongitude()) {
+                    $distance = $this->calculateDistance(
+                        $userLat, $userLon,
+                        (float)$profile->getLatitude(), (float)$profile->getLongitude()
+                    );
+                }
+
+                $results[] = [
+                    'id' => $profile->getId(),
+                    'specialty' => $profile->getSpecialty(),
+                    'city' => $profile->getCity(),
+                    'bio' => $profile->getBio(),
+                    'distance' => $distance !== null ? round($distance, 1) : null,
+                    'user' => [
+                        'firstName' => $profile->getUser()->getFirstName(),
+                        'lastName' => $profile->getUser()->getLastName(),
+                    ],
+                ];
+            }
+
+            // Tri (Seulement si on a une distance sur laquelle trier)
+            if ($userLat && $userLon) {
+                usort($results, function($a, $b) {
+                    if ($a['distance'] === $b['distance']) return 0;
+                    if ($a['distance'] === null) return 1;
+                    if ($b['distance'] === null) return -1;
+                    return ($a['distance'] < $b['distance']) ? -1 : 1;
+                });
+            }
+
+            return $this->json(['success' => true, 'data' => $results]);
+
+        } catch (\Exception $e) {
+            // C'EST ICI QUE TU VERRAS L'ERREUR DANS TES LOGS SI CA RE-PLANTE
+            return $this->json([
+                'success' => false,
+                'message' => 'Erreur serveur: ' . $e->getMessage()
+            ], 500);
         }
     }
 

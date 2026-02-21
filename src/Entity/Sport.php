@@ -39,11 +39,18 @@ class Sport
     #[ORM\OneToMany(mappedBy: 'sport', targetEntity: Venue::class)]
     private Collection $venues;
 
+    /**
+     * @var Collection<int, Availability>
+     */
+    #[ORM\OneToMany(targetEntity: Availability::class, mappedBy: 'sport')]
+    private Collection $availabilities;
+
     public function __construct()
     {
         $this->profiles = new ArrayCollection();
         $this->venues = new ArrayCollection();
         $this->createdAt = new \DateTimeImmutable();
+        $this->availabilities = new ArrayCollection();
     }
 
     public function getId(): ?int
@@ -155,6 +162,36 @@ class Sport
                 $venue->setSport(null);
             }
         }
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, Availability>
+     */
+    public function getAvailabilities(): Collection
+    {
+        return $this->availabilities;
+    }
+
+    public function addAvailability(Availability $availability): static
+    {
+        if (!$this->availabilities->contains($availability)) {
+            $this->availabilities->add($availability);
+            $availability->setSport($this);
+        }
+
+        return $this;
+    }
+
+    public function removeAvailability(Availability $availability): static
+    {
+        if ($this->availabilities->removeElement($availability)) {
+            // set the owning side to null (unless already changed)
+            if ($availability->getSport() === $this) {
+                $availability->setSport(null);
+            }
+        }
+
         return $this;
     }
 }

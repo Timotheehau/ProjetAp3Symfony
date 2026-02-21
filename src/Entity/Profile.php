@@ -54,10 +54,10 @@ class Profile
     #[Assert\Range(min: -180, max: 180)]
     private ?string $longitude = null;
 
-    #[ORM\Column(type: Types::JSON, nullable: true)]
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
     private ?string $certifications = null;
 
-    #[ORM\Column(type: Types::JSON, nullable: true)]
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
     private ?string $diplomas = null;
 
     #[ORM\Column(type: Types::DECIMAL, precision: 3, scale: 2, nullable: true)]
@@ -217,7 +217,7 @@ class Profile
         return $this;
     }
 
-    public function getCertifications(): ?array
+    public function getCertifications(): ?string
     {
         return $this->certifications;
     }
@@ -228,7 +228,7 @@ class Profile
         return $this;
     }
 
-    public function getDiplomas(): ?array
+    public function getDiplomas(): ?string
     {
         return $this->diplomas;
     }

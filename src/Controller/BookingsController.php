@@ -73,11 +73,28 @@ class BookingsController extends AbstractController
     )]
     public function list(Request $request, BookingRepository $bookingRepository): JsonResponse
     {
+        $user = $this->getUser();
         $userId = $request->query->get('userId');
         $profileId = $request->query->get('profileId');
         $status = $request->query->get('status');
 
         $queryBuilder = $bookingRepository->createQueryBuilder('b');
+
+        // Sécurité : On filtre TOUJOURS par l'utilisateur connecté
+        // Sauf si c'est un coach qui veut voir ses demandes (profileId)
+        if ($request->query->has('isCoach')) {
+            $queryBuilder->andWhere('b.profile = :profile')
+                ->setParameter('profile', $user->getProfile());
+        } else {
+            $queryBuilder->andWhere('b.client = :user')
+                ->setParameter('user', $user);
+        }
+
+        if ($status) {
+            $queryBuilder->andWhere('b.status = :status')->setParameter('status', $status);
+        }
+
+        $queryBuilder->orderBy('b.startTime', 'DESC');
 
         if ($userId) {
             $queryBuilder->andWhere('b.client = :userId')
@@ -145,7 +162,7 @@ class BookingsController extends AbstractController
     public function show(int $id, BookingRepository $bookingRepository): JsonResponse
     {
         $booking = $bookingRepository->find($id);
-        
+
         if (!$booking) {
             return $this->json([
                 'success' => false,
@@ -209,32 +226,31 @@ class BookingsController extends AbstractController
     public function create(
         Request $request,
         EntityManagerInterface $em,
-        UserRepository $userRepository,
         ProfileRepository $profileRepository,
         VenueRepository $venueRepository
     ): JsonResponse {
         $data = json_decode($request->getContent(), true);
+        $user = $this->getUser(); // On récupère l'utilisateur connecté
 
-        $client = $userRepository->find($data['clientId'] ?? null);
-        if (!$client) {
-            return $this->json([
-                'success' => false,
-                'message' => 'Client non trouvé'
-            ], Response::HTTP_BAD_REQUEST);
+        if (!$user) {
+            return $this->json(['success' => false, 'message' => 'Utilisateur non authentifié'], 401);
         }
 
         $profile = $profileRepository->find($data['profileId'] ?? null);
         if (!$profile) {
-            return $this->json([
-                'success' => false,
-                'message' => 'Professionnel non trouvé'
-            ], Response::HTTP_BAD_REQUEST);
+            return $this->json(['success' => false, 'message' => 'Professionnel non trouvé'], 400);
         }
 
-        $startTime = new \DateTime($data['startTime']);
-        $endTime = new \DateTime($data['endTime']);
+        // Conversion des dates envoyées par SportDetail.jsx
+        try {
+            $startTime = new \DateTime($data['date'] . ' ' . $data['startTime']);
+            // On calcule le endTime (par exemple +1h par défaut ou basé sur le slot)
+            $endTime = new \DateTime($data['date'] . ' ' . $data['endTime']);
+        } catch (\Exception $e) {
+            return $this->json(['success' => false, 'message' => 'Format de date invalide'], 400);
+        }
 
-        // Vérifier disponibilité
+        // --- Vérifier disponibilité (Ton code de conflit est très bien, on le garde) ---
         $conflicts = $em->getRepository(Booking::class)->createQueryBuilder('b')
             ->where('b.profile = :profile')
             ->andWhere('b.status IN (:statuses)')
@@ -247,33 +263,19 @@ class BookingsController extends AbstractController
             ->getResult();
 
         if (!empty($conflicts)) {
-            return $this->json([
-                'success' => false,
-                'message' => 'Le professionnel n\'est pas disponible à cette période'
-            ], Response::HTTP_CONFLICT);
+            return $this->json(['success' => false, 'message' => 'Ce créneau vient d\'être réservé !'], 409);
         }
 
         $booking = new Booking();
-        $booking->setClient($client);
+        $booking->setClient($user); // Sécurité : c'est l'user connecté
         $booking->setProfile($profile);
         $booking->setStartTime($startTime);
         $booking->setEndTime($endTime);
         $booking->setStatus('pending');
-        $booking->setNotes($data['notes'] ?? null);
+        $booking->setNotes($data['notes'] ?? "Match réservé via .MATCH");
 
-        if (isset($data['venueId'])) {
-            $venue = $venueRepository->find($data['venueId']);
-            if ($venue) {
-                $booking->setVenue($venue);
-            }
-        }
-
-        // Calculer le prix
-        $interval = $startTime->diff($endTime);
-        $hours = $interval->h + ($interval->i / 60);
-        $totalPrice = $hours * floatval($profile->getHourlyRate());
-        $booking->setTotalPrice((string)$totalPrice);
-
+        // MODIFICATION : On met le prix à "0" ou "Donation"
+        $booking->setTotalPrice("0");
         $booking->setCreatedAt(new \DateTimeImmutable());
 
         $em->persist($booking);
@@ -281,12 +283,8 @@ class BookingsController extends AbstractController
 
         return $this->json([
             'success' => true,
-            'message' => 'Réservation créée avec succès',
-            'data' => [
-                'id' => $booking->getId(),
-                'totalPrice' => $booking->getTotalPrice(),
-                'status' => $booking->getStatus(),
-            ]
+            'message' => 'Demande de match envoyée !',
+            'data' => ['id' => $booking->getId(), 'status' => $booking->getStatus()]
         ], Response::HTTP_CREATED);
     }
 
@@ -322,7 +320,7 @@ class BookingsController extends AbstractController
         BookingRepository $bookingRepository
     ): JsonResponse {
         $booking = $bookingRepository->find($id);
-        
+
         if (!$booking) {
             return $this->json([
                 'success' => false,
