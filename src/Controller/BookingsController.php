@@ -3,6 +3,7 @@
 namespace App\Controller;
 
 use App\Entity\Booking;
+use App\Repository\AvailabilityRepository;
 use App\Repository\BookingRepository;
 use App\Repository\UserRepository;
 use App\Repository\ProfileRepository;
@@ -226,44 +227,31 @@ class BookingsController extends AbstractController
     public function create(
         Request $request,
         EntityManagerInterface $em,
-        ProfileRepository $profileRepository,
-        \App\Repository\AvailabilityRepository $availabilityRepo // Ajoute ce Repo
+        AvailabilityRepository $availabilityRepo
     ): JsonResponse {
         $data = json_decode($request->getContent(), true);
         $user = $this->getUser();
 
-        if (!$user) {
-            return $this->json(['success' => false, 'message' => 'Utilisateur non authentifié'], 401);
-        }
-
-        // 1. Récupérer le créneau source
+        // 1. Récupération du créneau source
         $availability = $availabilityRepo->find($data['availabilityId'] ?? null);
-        if (!$availability || !$availability->isAvailable()) {
-            return $this->json(['success' => false, 'message' => 'Ce créneau n\'est plus disponible'], 400);
+        if (!$availability) {
+            return $this->json(['success' => false, 'message' => 'Créneau introuvable'], 404);
         }
 
-        $profile = $availability->getProfile();
-
-        // 2. Préparer les dates à partir de l'Availability
-        // On combine la date choisie (si récurrent) ou la specificDate avec les heures
+        // 2. Définition des objets DateTime (Correction de l'erreur)
         try {
-            $dateStr = $data['selectedDate'] ?? $availability->getSpecificDate()?->format('Y-m-d');
-            if (!$dateStr) {
-                return $this->json(['success' => false, 'message' => 'Date non spécifiée'], 400);
-            }
-
-            $startTime = new \DateTime($dateStr . ' ' . $availability->getStartTime()->format('H:i:s'));
-            $endTime = new \DateTime($dateStr . ' ' . $availability->getEndTime()->format('H:i:s'));
+            $startTime = new \DateTime($data['startTime']);
+            $endTime = new \DateTime($data['endTime']);
         } catch (\Exception $e) {
-            return $this->json(['success' => false, 'message' => 'Erreur de formatage de date'], 400);
+            return $this->json(['success' => false, 'message' => 'Format de date invalide'], 400);
         }
 
-        // --- Ton code de conflit existant (On le garde, c'est une sécurité double) ---
+        // 3. Vérification de conflit sur la tranche entière
         $conflicts = $em->getRepository(Booking::class)->createQueryBuilder('b')
             ->where('b.profile = :profile')
             ->andWhere('b.status IN (:statuses)')
             ->andWhere('(b.startTime < :endTime AND b.endTime > :startTime)')
-            ->setParameter('profile', $profile)
+            ->setParameter('profile', $availability->getProfile())
             ->setParameter('statuses', ['pending', 'confirmed'])
             ->setParameter('startTime', $startTime)
             ->setParameter('endTime', $endTime)
@@ -271,21 +259,21 @@ class BookingsController extends AbstractController
             ->getResult();
 
         if (!empty($conflicts)) {
-            return $this->json(['success' => false, 'message' => 'Ce créneau vient d\'être réservé !'], 409);
+            return $this->json(['success' => false, 'message' => 'Ce créneau est déjà réservé'], 409);
         }
 
-        // 3. Création du Booking
+        // 4. Création du Booking
         $booking = new Booking();
         $booking->setClient($user);
-        $booking->setProfile($profile);
+        $booking->setProfile($availability->getProfile());
         $booking->setStartTime($startTime);
         $booking->setEndTime($endTime);
         $booking->setStatus('pending');
-        $booking->setNotes($data['notes'] ?? "Match réservé via planning");
-        $booking->setTotalPrice("0");
+        $booking->setTotalPrice($data['totalPrice'] ?? 0);
         $booking->setCreatedAt(new \DateTimeImmutable());
+        $booking->setNotes($data['notes'] ?? "");
 
-        // 4. Désactiver l'Availability (si elle n'est pas récurrente)
+        // 5. On bloque l'availability si elle n'est pas récurrente
         if (!$availability->isRecurring()) {
             $availability->setIsAvailable(false);
         }
@@ -293,11 +281,7 @@ class BookingsController extends AbstractController
         $em->persist($booking);
         $em->flush();
 
-        return $this->json([
-            'success' => true,
-            'message' => 'Demande de match envoyée !',
-            'data' => ['id' => $booking->getId()]
-        ], Response::HTTP_CREATED);
+        return $this->json(['success' => true, 'message' => 'Demande envoyée !']);
     }
 
     #[Route('/{id}/status', name: 'bookings_update_status', methods: ['PATCH'])]
