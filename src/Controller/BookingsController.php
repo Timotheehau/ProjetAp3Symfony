@@ -227,30 +227,38 @@ class BookingsController extends AbstractController
         Request $request,
         EntityManagerInterface $em,
         ProfileRepository $profileRepository,
-        VenueRepository $venueRepository
+        \App\Repository\AvailabilityRepository $availabilityRepo // Ajoute ce Repo
     ): JsonResponse {
         $data = json_decode($request->getContent(), true);
-        $user = $this->getUser(); // On récupère l'utilisateur connecté
+        $user = $this->getUser();
 
         if (!$user) {
             return $this->json(['success' => false, 'message' => 'Utilisateur non authentifié'], 401);
         }
 
-        $profile = $profileRepository->find($data['profileId'] ?? null);
-        if (!$profile) {
-            return $this->json(['success' => false, 'message' => 'Professionnel non trouvé'], 400);
+        // 1. Récupérer le créneau source
+        $availability = $availabilityRepo->find($data['availabilityId'] ?? null);
+        if (!$availability || !$availability->isAvailable()) {
+            return $this->json(['success' => false, 'message' => 'Ce créneau n\'est plus disponible'], 400);
         }
 
-        // Conversion des dates envoyées par SportDetail.jsx
+        $profile = $availability->getProfile();
+
+        // 2. Préparer les dates à partir de l'Availability
+        // On combine la date choisie (si récurrent) ou la specificDate avec les heures
         try {
-            $startTime = new \DateTime($data['date'] . ' ' . $data['startTime']);
-            // On calcule le endTime (par exemple +1h par défaut ou basé sur le slot)
-            $endTime = new \DateTime($data['date'] . ' ' . $data['endTime']);
+            $dateStr = $data['selectedDate'] ?? $availability->getSpecificDate()?->format('Y-m-d');
+            if (!$dateStr) {
+                return $this->json(['success' => false, 'message' => 'Date non spécifiée'], 400);
+            }
+
+            $startTime = new \DateTime($dateStr . ' ' . $availability->getStartTime()->format('H:i:s'));
+            $endTime = new \DateTime($dateStr . ' ' . $availability->getEndTime()->format('H:i:s'));
         } catch (\Exception $e) {
-            return $this->json(['success' => false, 'message' => 'Format de date invalide'], 400);
+            return $this->json(['success' => false, 'message' => 'Erreur de formatage de date'], 400);
         }
 
-        // --- Vérifier disponibilité (Ton code de conflit est très bien, on le garde) ---
+        // --- Ton code de conflit existant (On le garde, c'est une sécurité double) ---
         $conflicts = $em->getRepository(Booking::class)->createQueryBuilder('b')
             ->where('b.profile = :profile')
             ->andWhere('b.status IN (:statuses)')
@@ -266,17 +274,21 @@ class BookingsController extends AbstractController
             return $this->json(['success' => false, 'message' => 'Ce créneau vient d\'être réservé !'], 409);
         }
 
+        // 3. Création du Booking
         $booking = new Booking();
-        $booking->setClient($user); // Sécurité : c'est l'user connecté
+        $booking->setClient($user);
         $booking->setProfile($profile);
         $booking->setStartTime($startTime);
         $booking->setEndTime($endTime);
         $booking->setStatus('pending');
-        $booking->setNotes($data['notes'] ?? "Match réservé via .MATCH");
-
-        // MODIFICATION : On met le prix à "0" ou "Donation"
+        $booking->setNotes($data['notes'] ?? "Match réservé via planning");
         $booking->setTotalPrice("0");
         $booking->setCreatedAt(new \DateTimeImmutable());
+
+        // 4. Désactiver l'Availability (si elle n'est pas récurrente)
+        if (!$availability->isRecurring()) {
+            $availability->setIsAvailable(false);
+        }
 
         $em->persist($booking);
         $em->flush();
@@ -284,7 +296,7 @@ class BookingsController extends AbstractController
         return $this->json([
             'success' => true,
             'message' => 'Demande de match envoyée !',
-            'data' => ['id' => $booking->getId(), 'status' => $booking->getStatus()]
+            'data' => ['id' => $booking->getId()]
         ], Response::HTTP_CREATED);
     }
 

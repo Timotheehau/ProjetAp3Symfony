@@ -85,23 +85,21 @@ class AuthController extends AbstractController
         $user->setFirstName($data['firstName']);
         $user->setLastName($data['lastName']);
         $user->setPhone($data['phone'] ?? null);
-        $user->setCity($data['city']) ?? null;
+        $user->setCity($data['city'] ?? null);
         $user->setCreatedAt(new \DateTimeImmutable());
         $user->setUpdatedAt(new \DateTimeImmutable());
 
         $userType = $data['userType'] ?? 'particular';
         $user->setUserType($userType);
 
-        // 3. Gestion des Sports (on décode la chaîne JSON envoyée par le front)
+        // 3. Gestion des Sports
         $sportsData = $data['sports'] ?? '[]';
         $sportIds = is_array($sportsData) ? $sportsData : json_decode($sportsData, true);
 
-        if ($userType === 'particular') {
-            if (is_array($sportIds)) {
-                foreach ($sportIds as $sportId) {
-                    $sport = $sportRepo->find($sportId);
-                    if ($sport) $user->addSport($sport);
-                }
+        if ($userType === 'particular' && is_array($sportIds)) {
+            foreach ($sportIds as $sportId) {
+                $sport = $sportRepo->find($sportId);
+                if ($sport) $user->addSport($sport);
             }
         }
 
@@ -118,6 +116,33 @@ class AuthController extends AbstractController
             $profile->setIsActive(true);
             $profile->setCreatedAt(new \DateTimeImmutable());
             $profile->setUpdatedAt(new \DateTimeImmutable());
+
+            // --- GÉOCODAGE AVEC NETTOYAGE ---
+            $cityInput = $data['city'] ?? null;
+            if ($cityInput) {
+                try {
+                    // Nettoyage : On enlève les (78640) et les tirets pour l'API
+                    $cleanCity = trim(preg_replace('/\s*\(.*\)\s*/', '', $cityInput));
+                    $cleanCity = str_replace(' - ', ' ', $cleanCity);
+
+                    $apiUrl = "https://api-adresse.data.gouv.fr/search/?q=" . urlencode($cleanCity) . "&limit=1";
+
+                    // On utilise @ pour éviter les warnings si l'API est injoignable
+                    $response = @file_get_contents($apiUrl);
+
+                    if ($response) {
+                        $geoData = json_decode($response, true);
+                        if (!empty($geoData['features'])) {
+                            $coordinates = $geoData['features'][0]['geometry']['coordinates'];
+                            // API Gouv renvoie [Longitude, Latitude]
+                            $profile->setLongitude((string)$coordinates[0]);
+                            $profile->setLatitude((string)$coordinates[1]);
+                        }
+                    }
+                } catch (\Exception $e) {
+                    // En cas d'erreur API, on continue l'inscription sans bloquer
+                }
+            }
 
             // 4. Traitement des fichiers (Upload)
             if ($diplomaFile) {
