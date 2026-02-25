@@ -75,38 +75,30 @@ class BookingsController extends AbstractController
     public function list(Request $request, BookingRepository $bookingRepository): JsonResponse
     {
         $user = $this->getUser();
-        $userId = $request->query->get('userId');
         $profileId = $request->query->get('profileId');
         $status = $request->query->get('status');
+        $isCoachQuery = $request->query->has('isCoach');
 
         $queryBuilder = $bookingRepository->createQueryBuilder('b');
 
-        // Sécurité : On filtre TOUJOURS par l'utilisateur connecté
-        // Sauf si c'est un coach qui veut voir ses demandes (profileId)
-        if ($request->query->has('isCoach')) {
-            $queryBuilder->andWhere('b.profile = :profile')
-                ->setParameter('profile', $user->getProfile());
-        } else {
-            $queryBuilder->andWhere('b.client = :user')
-                ->setParameter('user', $user);
-        }
-
-        if ($status) {
-            $queryBuilder->andWhere('b.status = :status')->setParameter('status', $status);
-        }
-
-        $queryBuilder->orderBy('b.startTime', 'DESC');
-
-        if ($userId) {
-            $queryBuilder->andWhere('b.client = :userId')
-                ->setParameter('userId', $userId);
-        }
-
+        // LOGIQUE DE FILTRAGE PRIORITAIRE
         if ($profileId) {
+            // Cas du planning : on veut voir les bookings d'un coach spécifique
+            // On ne filtre PAS par l'utilisateur connecté ici pour que n'importe qui
+            // puisse voir si le créneau est pris.
             $queryBuilder->andWhere('b.profile = :profileId')
                 ->setParameter('profileId', $profileId);
+        } elseif ($isCoachQuery) {
+            // Cas du dashboard coach : "Je veux voir MES séances à moi"
+            $queryBuilder->andWhere('b.profile = :myProfile')
+                ->setParameter('myProfile', $user->getProfile());
+        } else {
+            // Cas du dashboard élève : "Je veux voir MES réservations"
+            $queryBuilder->andWhere('b.client = :me')
+                ->setParameter('me', $user);
         }
 
+        // Filtre de statut (optionnel)
         if ($status) {
             $queryBuilder->andWhere('b.status = :status')
                 ->setParameter('status', $status);
@@ -115,6 +107,7 @@ class BookingsController extends AbstractController
         $queryBuilder->orderBy('b.startTime', 'DESC');
         $bookings = $queryBuilder->getQuery()->getResult();
 
+        // On garde ton array_map tel quel, il est très bien
         $data = array_map(function($booking) {
             return [
                 'id' => $booking->getId(),
