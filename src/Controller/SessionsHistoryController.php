@@ -125,4 +125,42 @@ class SessionsHistoryController extends AbstractController
         $em->flush();
         return $this->json(['success' => true]);
     }
+    #[Route('/{id}', name: 'sessions_update', methods: ['PATCH'])]
+    public function update(
+        int $id,
+        Request $request,
+        SessionHistoryRepository $repository,
+        EntityManagerInterface $em
+    ): JsonResponse {
+        $session = $repository->find($id);
+        if (!$session) {
+            return $this->json(['success' => false, 'message' => 'Session introuvable'], 404);
+        }
+
+        $data = json_decode($request->getContent(), true);
+        $user = $this->getUser(); // On récupère l'utilisateur connecté
+
+        // Sécurité & Attribution du feedback
+        // 1. Si c'est le pro (via son Profile)
+        if ($user->getProfile() && $user->getProfile()->getId() === $session->getProfile()->getId()) {
+            if (isset($data['professionalFeedback'])) {
+                $session->setProfessionalFeedback($data['professionalFeedback']);
+            }
+        }
+        // 2. Si c'est le client
+        elseif ($user->getId() === $session->getClient()->getId()) {
+            if (isset($data['clientFeedback'])) {
+                $session->setClientFeedback($data['clientFeedback']);
+            }
+        } else {
+            return $this->json(['success' => false, 'message' => 'Accès non autorisé'], 403);
+        }
+
+        $em->flush();
+
+        return $this->json([
+            'success' => true,
+            'message' => 'Feedback enregistré avec succès'
+        ]);
+    }
 }

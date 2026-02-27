@@ -108,8 +108,10 @@ class BookingsController extends AbstractController
         $queryBuilder->orderBy('b.startTime', 'DESC');
         $bookings = $queryBuilder->getQuery()->getResult();
 
-        // On garde ton array_map tel quel, il est très bien
         $data = array_map(function($booking) {
+            // On récupère l'historique s'il existe
+            $history = $booking->getSessionHistory();
+
             return [
                 'id' => $booking->getId(),
                 'startTime' => $booking->getStartTime()->format('Y-m-d H:i:s'),
@@ -118,6 +120,14 @@ class BookingsController extends AbstractController
                 'hasReview' => $booking->getReview() !== null,
                 'totalPrice' => $booking->getTotalPrice(),
                 'notes' => $booking->getNotes(),
+
+                // AJOUT DE L'OBJET SESSION HISTORY
+                'sessionHistory' => $history ? [
+                    'id' => $history->getId(),
+                    'professionalFeedback' => $history->getProfessionalFeedback(),
+                    'clientFeedback' => $history->getClientFeedback(),
+                ] : null,
+
                 'client' => [
                     'id' => $booking->getClient()->getId(),
                     'firstName' => $booking->getClient()->getFirstName(),
@@ -338,7 +348,15 @@ class BookingsController extends AbstractController
         }
 
         if ($newStatus === 'completed') {
-            $booking->setCompletedAt(new \DateTimeImmutable());
+            $now = new \DateTimeImmutable();
+
+            if ($booking->getStartTime() > $now) {
+                return $this->json([
+                    'success' => false,
+                    'message' => "Vous ne pouvez pas terminer une séance qui n'a pas encore eu lieu."
+                ], Response::HTTP_BAD_REQUEST);
+            }
+            $booking->setCompletedAt($now);
 
             // --- AUTOMATISATION SESSION HISTORY ---
             // 1. On vérifie si un historique n'existe pas déjà pour ce booking (évite les doublons)
