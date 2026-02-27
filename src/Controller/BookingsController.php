@@ -3,6 +3,7 @@
 namespace App\Controller;
 
 use App\Entity\Booking;
+use App\Entity\SessionHistory;
 use App\Repository\AvailabilityRepository;
 use App\Repository\BookingRepository;
 use App\Repository\UserRepository;
@@ -114,6 +115,7 @@ class BookingsController extends AbstractController
                 'startTime' => $booking->getStartTime()->format('Y-m-d H:i:s'),
                 'endTime' => $booking->getEndTime()->format('Y-m-d H:i:s'),
                 'status' => $booking->getStatus(),
+                'hasReview' => $booking->getReview() !== null,
                 'totalPrice' => $booking->getTotalPrice(),
                 'notes' => $booking->getNotes(),
                 'client' => [
@@ -307,7 +309,8 @@ class BookingsController extends AbstractController
         Request $request,
         EntityManagerInterface $em,
         BookingRepository $bookingRepository
-    ): JsonResponse {
+    ): JsonResponse
+    {
         $booking = $bookingRepository->find($id);
 
         if (!$booking) {
@@ -336,13 +339,37 @@ class BookingsController extends AbstractController
 
         if ($newStatus === 'completed') {
             $booking->setCompletedAt(new \DateTimeImmutable());
+
+            // --- AUTOMATISATION SESSION HISTORY ---
+            // 1. On vérifie si un historique n'existe pas déjà pour ce booking (évite les doublons)
+            if (!$booking->getSessionHistory()) {
+                $history = new SessionHistory();
+                $history->setBooking($booking);
+                $history->setProfile($booking->getProfile());
+                $history->setClient($booking->getClient());
+                $history->setSessionDate($booking->getStartTime());
+
+                // 2. Calcul de la durée en minutes
+                if ($booking->getStartTime() && $booking->getEndTime()) {
+                    $durationInSeconds = $booking->getEndTime()->getTimestamp() - $booking->getStartTime()->getTimestamp();
+                    $durationInMinutes = floor($durationInSeconds / 60);
+                    $history->setDuration((int)$durationInMinutes);
+                } else {
+                    $history->setDuration(60); // Valeur par défaut si dates absentes
+                }
+
+                $history->setCreatedAt(new \DateTimeImmutable());
+
+                // 3. On persiste le nouvel historique
+                $em->persist($history);
+            }
         }
 
-        $em->flush();
+        $em->flush(); // Le flush enregistre à la fois le Booking et le SessionHistory
 
         return $this->json([
             'success' => true,
-            'message' => 'Statut mis à jour avec succès'
+            'message' => 'Statut mis à jour et historique créé'
         ]);
     }
 }

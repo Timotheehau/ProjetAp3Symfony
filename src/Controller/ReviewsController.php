@@ -2,7 +2,11 @@
 
 namespace App\Controller;
 
+use App\Entity\Review;
+use App\Repository\BookingRepository;
+use App\Repository\ProfileRepository;
 use App\Repository\ReviewRepository;
+use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -124,7 +128,7 @@ class ReviewsController extends AbstractController
     public function show(int $id, ReviewRepository $reviewRepository): JsonResponse
     {
         $review = $reviewRepository->find($id);
-        
+
         if (!$review) {
             return $this->json([
                 'success' => false,
@@ -176,11 +180,61 @@ class ReviewsController extends AbstractController
     )]
     #[OA\Response(response: 201, description: 'Avis créé avec succès')]
     #[OA\Response(response: 400, description: 'Données invalides')]
-    public function create(): JsonResponse
-    {
+    public function create(
+        Request $request,
+        EntityManagerInterface $em,
+        ProfileRepository $profileRepo,
+        BookingRepository $bookingRepo,
+        ReviewRepository $reviewRepo // AJOUTE CETTE REPO
+    ): JsonResponse {
+        $user = $this->getUser();
+        $data = json_decode($request->getContent(), true);
+
+        if (isset($data['bookingId'])) {
+            $existingReview = $reviewRepo->findOneBy([
+                'booking' => $data['bookingId']
+            ]);
+
+            if ($existingReview) {
+                return $this->json([
+                    'success' => false,
+                    'message' => 'Tu as déjà noté ce match, champion !'
+                ], 400);
+            }
+        }
+        // Validation de base
+        if (!isset($data['profileId'], $data['rating'])) {
+            return $this->json(['success' => false, 'message' => 'Données manquantes'], 400);
+        }
+
+        $profile = $profileRepo->find($data['profileId']);
+        if (!$profile) {
+            return $this->json(['success' => false, 'message' => 'Profil non trouvé'], 404);
+        }
+
+        $review = new Review();
+        $review->setAuthor($user);
+        $review->setProfile($profile);
+        $review->setRating((int)$data['rating']);
+        $review->setComment($data['comment'] ?? null);
+
+        // Logique de vérification par Booking
+        if (isset($data['bookingId'])) {
+            $booking = $bookingRepo->find($data['bookingId']);
+            // On vérifie que le booking appartient bien à l'auteur
+            if ($booking && $booking->getClient() === $user) {
+                $review->setBooking($booking);
+                $review->setIsVerified(true);
+            }
+        }
+
+        $em->persist($review);
+        $em->flush();
+
         return $this->json([
             'success' => true,
-            'message' => 'Méthode à implémenter'
-        ], Response::HTTP_NOT_IMPLEMENTED);
+            'message' => 'Avis enregistré !',
+            'data' => ['id' => $review->getId()]
+        ], Response::HTTP_CREATED);
     }
 }

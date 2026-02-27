@@ -3,6 +3,7 @@
 namespace App\Controller;
 
 use App\Repository\SessionHistoryRepository;
+use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -87,7 +88,10 @@ class SessionsHistoryController extends AbstractController
                 'notes' => $session->getNotes(),
                 'clientFeedback' => $session->getClientFeedback(),
                 'professionalFeedback' => $session->getProfessionalFeedback(),
-                'createdAt' => $session->getCreatedAt()->format('Y-m-d H:i:s'),
+                'booking' => [
+                    'id' => $session->getBooking()->getId(),
+                    'status' => $session->getBooking()->getStatus(),
+                ],
             ];
         }, $sessions);
 
@@ -95,5 +99,30 @@ class SessionsHistoryController extends AbstractController
             'success' => true,
             'data' => $data
         ]);
+    }
+    #[Route('/{id}/feedback', name: 'sessions_feedback', methods: ['POST'])]
+    public function addFeedback(
+        int $id,
+        Request $request,
+        SessionHistoryRepository $repo,
+        EntityManagerInterface $em
+    ): JsonResponse {
+        $session = $repo->find($id);
+        $user = $this->getUser();
+        $data = json_decode($request->getContent(), true);
+
+        if (!$session) return $this->json(['message' => 'Session introuvable'], 404);
+
+        // Si c'est le coach qui écrit
+        if ($user->getProfile() === $session->getProfile()) {
+            $session->setProfessionalFeedback($data['feedback']);
+        }
+        // Si c'est l'élève
+        elseif ($user === $session->getClient()) {
+            $session->setClientFeedback($data['feedback']);
+        }
+
+        $em->flush();
+        return $this->json(['success' => true]);
     }
 }

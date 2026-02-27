@@ -221,7 +221,6 @@ class ProfilesController extends AbstractController
                 'level' => $profile->getLevel(),
                 'bio' => $profile->getBio(),
                 'yearsOfExperience' => $profile->getYearsOfExperience(),
-                'hourlyRate' => $profile->getHourlyRate(),
                 'city' => $profile->getCity(),
                 'address' => $profile->getAddress(),
                 'latitude' => $profile->getLatitude(),

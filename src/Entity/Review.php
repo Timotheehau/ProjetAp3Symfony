@@ -25,7 +25,8 @@ class Review
     #[ORM\JoinColumn(nullable: false)]
     private ?User $author = null;
 
-    #[ORM\ManyToOne]
+    #[ORM\OneToOne(inversedBy: 'review', targetEntity: Booking::class)]
+    #[ORM\JoinColumn(nullable: false)]
     private ?Booking $booking = null;
 
     #[ORM\Column]

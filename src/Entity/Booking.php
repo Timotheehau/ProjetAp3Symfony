@@ -63,6 +63,9 @@ class Booking
     #[ORM\OneToOne(mappedBy: 'booking', cascade: ['persist', 'remove'])]
     private ?SessionHistory $sessionHistory = null;
 
+    #[ORM\OneToOne(mappedBy: 'booking', targetEntity: Review::class)]
+    private ?Review $review = null;
+
     public function __construct()
     {
         $this->createdAt = new \DateTimeImmutable();
@@ -159,6 +162,10 @@ class Booking
     {
         $this->notes = $notes;
         return $this;
+    }
+    public function getReview(): ?Review
+    {
+        return $this->review;
     }
 
     public function getCancellationReason(): ?string
