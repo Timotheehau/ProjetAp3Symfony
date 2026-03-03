@@ -63,6 +63,9 @@ class Booking
     #[ORM\OneToOne(mappedBy: 'booking', cascade: ['persist', 'remove'])]
     private ?SessionHistory $sessionHistory = null;
 
+    #[ORM\Column(options: ["default" => false])]
+    private ?bool $isStatusSeenByClient = false;
+
     #[ORM\OneToOne(mappedBy: 'booking', targetEntity: Review::class)]
     private ?Review $review = null;
 
@@ -220,6 +223,17 @@ class Booking
     public function setUpdatedAt(?\DateTimeImmutable $updatedAt): static
     {
         $this->updatedAt = $updatedAt;
+        return $this;
+    }
+    public function isStatusSeenByClient(): ?bool
+    {
+        return $this->isStatusSeenByClient;
+    }
+
+    public function setIsStatusSeenByClient(bool $isStatusSeenByClient): self
+    {
+        $this->isStatusSeenByClient = $isStatusSeenByClient;
+
         return $this;
     }
 

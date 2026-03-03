@@ -205,6 +205,210 @@ class BookingsController extends AbstractController
         ]);
     }
 
+    #[Route('/notifications/count', name: 'notifications_count', methods: ['GET'])]
+    public function getNotificationCount(BookingRepository $bookingRepo, EntityManagerInterface $em): JsonResponse
+    {
+        $user = $this->getUser();
+        if (!$user) return $this->json(['total' => 0]);
+
+        if ($user->getUserType() === 'professional') {
+            // COMPTEUR COACH : On compte UNIQUEMENT les demandes non vues
+            $total = $bookingRepo->count([
+                'profile' => $user->getProfile(),
+                'status' => 'pending',
+                'isStatusSeenByClient' => false // <--- INDISPENSABLE
+            ]);
+        } else {
+            // COMPTEUR CLIENT
+            $newConfirmations = $bookingRepo->count([
+                'client' => $user,
+                'status' => 'confirmed',
+                'isStatusSeenByClient' => false
+            ]);
+
+            $newFeedbacks = (int)$em->getRepository(\App\Entity\SessionHistory::class)->createQueryBuilder('sh')
+                ->select('count(sh.id)')
+                ->where('sh.client = :user')
+                ->andWhere('sh.isReadByClient = false')
+                ->setParameter('user', $user)
+                ->getQuery()
+                ->getSingleScalarResult();
+
+            $total = $newConfirmations + $newFeedbacks;
+        }
+
+        return $this->json(['total' => $total]);
+    }
+    #[Route('/notifications/delete-bulk', name: 'notifications_delete_bulk', methods: ['POST'])]
+    public function deleteBulk(Request $request, EntityManagerInterface $em): JsonResponse
+    {
+        $data = json_decode($request->getContent(), true);
+        $items = $data['items'] ?? [];
+
+        foreach ($items as $item) {
+            $id = (int)$item['id'];
+            $type = $item['type'];
+
+            // On regroupe tous les types qui concernent la table 'Booking'
+            // 'alert' (annulation), 'request' (nouvelle demande), 'confirmation' (match accepté)
+            if (in_array($type, ['confirmation', 'request', 'alert'])) {
+                $booking = $em->getRepository(\App\Entity\Booking::class)->find($id);
+                if ($booking) {
+                    // On marque comme "vu" pour qu'il disparaisse du filtre PHP au prochain refresh
+                    $booking->setIsStatusSeenByClient(true);
+                }
+            }
+            // Cas particulier des bilans
+            elseif ($type === 'feedback') {
+                $history = $em->getRepository(\App\Entity\SessionHistory::class)->find($id);
+                if ($history) {
+                    $history->setIsReadByClient(true);
+                }
+            }
+        }
+
+        $em->flush(); // On valide les changements en une seule fois
+        return $this->json(['success' => true]);
+    }
+
+    #[Route('/mark-all-as-seen', name: 'bookings_mark_seen', methods: ['POST'])]
+    public function markAllAsSeen(EntityManagerInterface $em): JsonResponse
+    {
+        $user = $this->getUser();
+
+        // 1. Marquer les statuts de bookings comme vus
+        $em->createQueryBuilder()
+            ->update(\App\Entity\Booking::class, 'b')
+            ->set('b.isStatusSeenByClient', 'true')
+            ->where('b.client = :user')
+            ->andWhere('b.status = :status')
+            ->setParameter('user', $user)
+            ->setParameter('status', 'confirmed')
+            ->getQuery()
+            ->execute();
+
+        // 2. Marquer les feedbacks comme vus
+        $em->createQueryBuilder()
+            ->update(\App\Entity\SessionHistory::class, 'sh')
+            ->set('sh.isReadByClient', 'true')
+            ->where('sh.client = :user')
+            ->setParameter('user', $user)
+            ->getQuery()
+            ->execute();
+
+        return $this->json(['success' => true]);
+    }
+    #[Route('/mark-one-seen', name: 'bookings_mark_one_seen', methods: ['POST'])]
+    public function markOneSeen(Request $request, EntityManagerInterface $em): JsonResponse
+    {
+        $data = json_decode($request->getContent(), true);
+        $id = isset($data['id']) ? (int)$data['id'] : 0;
+        $type = $data['type'] ?? '';
+
+        // Utilisation des noms de classe complets pour éviter les erreurs d'import
+        if (in_array($type, ['confirmation', 'request', 'alert'])) {
+            $repo = $em->getRepository(\App\Entity\Booking::class);
+            $item = $repo->find($id);
+
+            if ($item) {
+                $item->setIsStatusSeenByClient(true);
+                // On force Doctrine à voir que l'objet a changé
+                $em->persist($item);
+            }
+        } elseif ($type === 'feedback') {
+            $repo = $em->getRepository(\App\Entity\SessionHistory::class);
+            $item = $repo->find($id);
+
+            if ($item) {
+                $item->setIsReadByClient(true);
+                $em->persist($item);
+            }
+        }
+
+        // Le flush DOIT être ici pour valider la transaction SQL
+        $em->flush();
+
+        return $this->json(['success' => true]);
+    }
+
+    #[Route('/notifications/list', name: 'notifications_list', methods: ['GET'])]
+    public function getNotificationList(BookingRepository $bookingRepo, EntityManagerInterface $em): JsonResponse
+    {
+        $user = $this->getUser();
+        $notifications = [];
+        $limitDate = new \DateTimeImmutable('-7 days');
+
+        if ($user->getUserType() === 'professional') {
+            $profile = $user->getProfile();
+
+            $bookings = $bookingRepo->createQueryBuilder('b')
+                ->where('b.profile = :profile')
+                ->andWhere('b.status IN (:statuses)')
+                ->andWhere('b.isStatusSeenByClient = false') // <--- FILTRE AJOUTÉ
+                ->andWhere('b.createdAt >= :limit OR b.updatedAt >= :limit')
+                ->setParameter('profile', $profile)
+                ->setParameter('statuses', ['pending', 'cancelled'])
+                ->setParameter('limit', $limitDate)
+                ->getQuery()->getResult();
+
+            foreach ($bookings as $b) {
+                $notifications[] = [
+                    'type' => $b->getStatus() === 'pending' ? 'request' : 'alert',
+                    'id' => $b->getId(),
+                    'message' => $b->getStatus() === 'pending'
+                        ? "Nouvelle demande : {$b->getClient()->getFirstName()}..."
+                        : "Alerte : {$b->getClient()->getFirstName()} a annulé...",
+                    'date' => $b->getUpdatedAt() ? $b->getUpdatedAt()->format('Y-m-d H:i:s') : $b->getCreatedAt()->format('Y-m-d H:i:s'),
+                    'isRead' => false // On sait que c'est false grâce au filtre au-dessus
+                ];
+            }
+        } else {
+            // --- PARTIE CLIENT ---
+            $bookings = $bookingRepo->createQueryBuilder('b')
+                ->where('b.client = :user')
+                ->andWhere('b.status IN (:statuses)')
+                ->andWhere('b.isStatusSeenByClient = false') // <--- FILTRE AJOUTÉ
+                ->setParameter('user', $user)
+                ->setParameter('statuses', ['confirmed', 'cancelled'])
+                ->orderBy('b.updatedAt', 'DESC')
+                ->setMaxResults(20)
+                ->getQuery()
+                ->getResult();
+
+            foreach ($bookings as $b) {
+                $notifications[] = [
+                    'type' => $b->getStatus() === 'confirmed' ? 'confirmation' : 'alert',
+                    'id' => $b->getId(),
+                    'message' => $b->getStatus() === 'confirmed'
+                        ? "Match confirmé avec {$b->getProfile()->getUser()->getFirstName()} le {$b->getStartTime()->format('d/m')}."
+                        : "Match annulé : la séance du {$b->getStartTime()->format('d/m')} n'aura pas lieu.",
+                    'date' => $b->getUpdatedAt() ? $b->getUpdatedAt()->format('Y-m-d H:i:s') : $b->getStartTime()->format('Y-m-d H:i:s'),
+                    'isRead' => false
+                ];
+            }
+
+            // Bilans (Feedbacks)
+            $feedbacks = $em->getRepository(\App\Entity\SessionHistory::class)->findBy(
+                ['client' => $user, 'isReadByClient' => false], // <--- FILTRE AJOUTÉ ICI AUSSI
+                ['id' => 'DESC'],
+                10
+            );
+
+            foreach ($feedbacks as $sh) {
+                $notifications[] = [
+                    'type' => 'feedback',
+                    'id' => $sh->getId(),
+                    'message' => "Nouveau bilan disponible pour votre séance du {$sh->getSessionDate()->format('d/m')}.",
+                    'date' => $sh->getSessionDate()->format('Y-m-d H:i:s'),
+                    'isRead' => false
+                ];
+            }
+        }
+
+        usort($notifications, fn($a, $b) => strcmp($b['date'], $a['date']));
+        return $this->json($notifications);
+    }
+
     #[Route('', name: 'bookings_create', methods: ['POST'])]
     #[OA\Post(
         path: '/api/bookings',
@@ -341,6 +545,8 @@ class BookingsController extends AbstractController
         }
 
         $booking->setStatus($newStatus);
+
+        $booking->setIsStatusSeenByClient(false);
 
         if ($newStatus === 'cancelled') {
             $booking->setCancelledAt(new \DateTimeImmutable());

@@ -116,6 +116,7 @@ class SessionsHistoryController extends AbstractController
         // Si c'est le coach qui écrit
         if ($user->getProfile() === $session->getProfile()) {
             $session->setProfessionalFeedback($data['feedback']);
+            $session->setIsReadByClient(false);
         }
         // Si c'est l'élève
         elseif ($user === $session->getClient()) {
@@ -145,6 +146,7 @@ class SessionsHistoryController extends AbstractController
         if ($user->getProfile() && $user->getProfile()->getId() === $session->getProfile()->getId()) {
             if (isset($data['professionalFeedback'])) {
                 $session->setProfessionalFeedback($data['professionalFeedback']);
+                $session->setIsReadByClient(false);
             }
         }
         // 2. Si c'est le client

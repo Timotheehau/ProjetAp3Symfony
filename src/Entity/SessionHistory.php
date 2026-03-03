@@ -43,6 +43,9 @@ class SessionHistory
     #[ORM\Column(type: Types::TEXT, nullable: true)]
     private ?string $professionalFeedback = null;
 
+    #[ORM\Column(options: ["default" => false])]
+    private ?bool $isReadByClient = false;
+
     #[ORM\Column]
     private ?\DateTimeImmutable $createdAt = null;
 
@@ -152,6 +155,17 @@ class SessionHistory
     public function setCreatedAt(\DateTimeImmutable $createdAt): static
     {
         $this->createdAt = $createdAt;
+        return $this;
+    }
+    public function isReadByClient(): ?bool
+    {
+        return $this->isReadByClient;
+    }
+
+    public function setIsReadByClient(bool $isReadByClient): self
+    {
+        $this->isReadByClient = $isReadByClient;
+
         return $this;
     }
 }
