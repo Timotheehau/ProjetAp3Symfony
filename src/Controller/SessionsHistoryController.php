@@ -81,6 +81,11 @@ class SessionsHistoryController extends AbstractController
         $sessions = $queryBuilder->getQuery()->getResult();
 
         $data = array_map(function($session) {
+            $profile = $session->getProfile();
+            $sportName = "Session";
+            if ($profile && !$profile->getSports()->isEmpty()) {
+                $sportName = $profile->getSports()->first()->getName();
+            }
             return [
                 'id' => $session->getId(),
                 'sessionDate' => $session->getSessionDate()->format('Y-m-d H:i:s'),
@@ -88,6 +93,7 @@ class SessionsHistoryController extends AbstractController
                 'notes' => $session->getNotes(),
                 'clientFeedback' => $session->getClientFeedback(),
                 'professionalFeedback' => $session->getProfessionalFeedback(),
+                'sportName' => $sportName,
                 'booking' => [
                     'id' => $session->getBooking()->getId(),
                     'status' => $session->getBooking()->getStatus(),
