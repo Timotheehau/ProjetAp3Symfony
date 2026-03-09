@@ -45,6 +45,9 @@ class Booking
     #[ORM\Column(type: Types::TEXT, nullable: true)]
     private ?string $notes = null;
 
+    #[ORM\Column(length: 20, nullable: true)]
+    private ?string $cancelledBy = null;
+
     #[ORM\Column(type: Types::TEXT, nullable: true)]
     private ?string $cancellationReason = null;
 
@@ -169,6 +172,12 @@ class Booking
     public function getReview(): ?Review
     {
         return $this->review;
+    }
+
+    public function getCancelledBy(): ?string { return $this->cancelledBy; }
+    public function setCancelledBy(?string $cancelledBy): self {
+        $this->cancelledBy = $cancelledBy;
+        return $this;
     }
 
     public function getCancellationReason(): ?string

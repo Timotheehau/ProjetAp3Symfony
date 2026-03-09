@@ -204,7 +204,7 @@ class BookingsController extends AbstractController
             ]
         ]);
     }
-
+/*
     #[Route('/notifications/count', name: 'notifications_count', methods: ['GET'])]
     public function getNotificationCount(BookingRepository $bookingRepo, EntityManagerInterface $em): JsonResponse
     {
@@ -216,7 +216,7 @@ class BookingsController extends AbstractController
             $total = $bookingRepo->count([
                 'profile' => $user->getProfile(),
                 'status' => 'pending',
-                'isStatusSeenByClient' => false // <--- INDISPENSABLE
+                'isStatusSeenByClient' => false
             ]);
         } else {
             // COMPTEUR CLIENT
@@ -408,7 +408,7 @@ class BookingsController extends AbstractController
         usort($notifications, fn($a, $b) => strcmp($b['date'], $a['date']));
         return $this->json($notifications);
     }
-
+*/
     #[Route('', name: 'bookings_create', methods: ['POST'])]
     #[OA\Post(
         path: '/api/bookings',
@@ -550,7 +550,15 @@ class BookingsController extends AbstractController
 
         if ($newStatus === 'cancelled') {
             $booking->setCancelledAt(new \DateTimeImmutable());
-            $booking->setCancellationReason($data['cancellationReason'] ?? null);
+            $booking->setCancellationReason($data['cancellationReason'] ?? 'Non spécifiée');
+
+            // On identifie qui annule
+            $user = $this->getUser();
+            if ($user === $booking->getClient()) {
+                $booking->setCancelledBy('client');
+            } elseif ($user->getProfile() === $booking->getProfile()) {
+                $booking->setCancelledBy('professional');
+            }
         }
 
         if ($newStatus === 'completed') {
