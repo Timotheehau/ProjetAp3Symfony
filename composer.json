@@ -12,7 +12,7 @@
         "doctrine/orm": "^3.6",
         "lexik/jwt-authentication-bundle": "^3.2",
         "nelmio/api-doc-bundle": "^5.9",
-        "nelmio/cors-bundle": "^2.6",
+        "nelmio/cors-bundle": "*",
         "phpdocumentor/reflection-docblock": "^6.0",
         "phpstan/phpdoc-parser": "^2.3",
         "symfony/asset": "8.0.*",
@@ -33,6 +33,7 @@
         "symfony/process": "8.0.*",
         "symfony/property-access": "8.0.*",
         "symfony/property-info": "8.0.*",
+        "symfony/rate-limiter": "8.0.*",
         "symfony/runtime": "8.0.*",
         "symfony/security-bundle": "8.0.*",
         "symfony/serializer": "8.0.*",
@@ -111,4 +112,3 @@
         "symfony/web-profiler-bundle": "8.0.*"
     }
 }
- 

@@ -30,8 +30,15 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Column]
     private array $roles = [];
 
+    #[Assert\NotBlank(groups: ['registration'])]
+    #[Assert\Regex(
+        pattern: '/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/',
+        message: 'Votre mot de passe doit contenir au moins 8 caractères, une majuscule, un chiffre et un caractère spécial.',
+        groups: ['registration']
+    )]
+    private ?string $plainPassword = null;
+
     #[ORM\Column]
-    #[Assert\NotBlank(message: 'Le mot de passe est obligatoire')]
     private ?string $password = null;
 
     #[ORM\Column(length: 100)]
@@ -62,8 +69,8 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Column]
     private bool $isActive = true;
 
-    #[ORM\Column]
-    private ?\DateTimeImmutable $createdAt = null;
+        #[ORM\Column]
+        private ?\DateTimeImmutable $createdAt = null;
 
     #[ORM\Column(nullable: true)]
     private ?\DateTimeImmutable $updatedAt = null;
@@ -144,6 +151,17 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function setPassword(string $password): static
     {
         $this->password = $password;
+        return $this;
+    }
+
+    public function getPlainPassword(): ?string
+    {
+        return $this->plainPassword;
+    }
+
+    public function setPlainPassword(?string $plainPassword): self
+    {
+        $this->plainPassword = $plainPassword;
         return $this;
     }
 

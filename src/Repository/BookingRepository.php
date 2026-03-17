@@ -16,6 +16,24 @@ class BookingRepository extends ServiceEntityRepository
         parent::__construct($registry, Booking::class);
     }
 
+    public function countAll(): int
+    {
+        return $this->createQueryBuilder('b')
+            ->select('count(b.id)')
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
+
+    public function countNewBookingsSince(\DateTime $date): int
+    {
+        return $this->createQueryBuilder('b')
+            ->select('count(b.id)')
+            ->where('b.createdAt >= :date')
+            ->setParameter('date', $date)
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
+
     //    /**
     //     * @return Booking[] Returns an array of Booking objects
     //     */

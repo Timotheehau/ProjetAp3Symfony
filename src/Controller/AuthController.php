@@ -17,6 +17,7 @@ use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface;
 use OpenApi\Attributes as OA;
+use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 class AuthController extends AbstractController
 {
@@ -56,34 +57,51 @@ class AuthController extends AbstractController
             )
         )
     )]
+    #[Route('/api/register', name: 'api_register', methods: ['POST'])]
+    #[OA\Post(
+        path: '/api/register',
+        summary: 'Créer un nouveau compte utilisateur avec documents et validation de sécurité',
+        tags: ['Authentication']
+    )]
     public function register(
         Request                     $request,
         EntityManagerInterface      $em,
         UserPasswordHasherInterface $passwordHasher,
-        SportRepository             $sportRepo
+        SportRepository             $sportRepo,
+        ValidatorInterface $validator
     ): JsonResponse
     {
-        // 1. Récupération des données via Request (POST standard / FormData)
+        // 1. Récupération des données via Request (FormData)
         $data = $request->request->all();
 
         // 2. Récupération des fichiers binaires
         $diplomaFile = $request->files->get('diplomas');
         $certifFile = $request->files->get('certifications');
 
-        // Validation minimale
+        // Validation de présence des données de base
         if (!isset($data['email'], $data['password'], $data['firstName'], $data['lastName'])) {
-            return $this->json(['success' => false, 'message' => 'Données obligatoires manquantes'], Response::HTTP_BAD_REQUEST);
+            return $this->json([
+                'success' => false,
+                'message' => 'Données obligatoires manquantes'
+            ], Response::HTTP_BAD_REQUEST);
         }
 
+        // Vérification unicité Email
         $existingUser = $em->getRepository(User::class)->findOneBy(['email' => $data['email']]);
         if ($existingUser) {
-            return $this->json(['success' => false, 'message' => 'Un utilisateur avec cet email existe déjà'], Response::HTTP_BAD_REQUEST);
+            return $this->json([
+                'success' => false,
+                'message' => 'Un utilisateur avec cet email existe déjà'
+            ], Response::HTTP_BAD_REQUEST);
         }
 
+        // 3. Initialisation de l'utilisateur avec le mot de passe en clair pour validation
         $user = new User();
         $user->setEmail($data['email']);
         $user->setFirstName($data['firstName']);
         $user->setLastName($data['lastName']);
+        $user->setPlainPassword($data['password']); // On passe le mot de passe ici pour la Regex
+
         $user->setPhone($data['phone'] ?? null);
         $user->setCity($data['city'] ?? null);
         $user->setCreatedAt(new \DateTimeImmutable());
@@ -92,7 +110,28 @@ class AuthController extends AbstractController
         $userType = $data['userType'] ?? 'particular';
         $user->setUserType($userType);
 
-        // 3. Gestion des Sports
+        // --- SÉCURITÉ : VALIDATION DES CONTRAINTES (Regex, Longueur, etc.) ---
+        // On valide avec le groupe 'registration' défini dans l'entité
+        $violations = $validator->validate($user, null, ['registration', 'Default']);
+
+        if (count($violations) > 0) {
+            $errors = [];
+            foreach ($violations as $violation) {
+                $errors[] = $violation->getMessage();
+            }
+            return $this->json([
+                'success' => false,
+                'message' => 'Erreur de validation des données',
+                'errors' => $errors
+            ], Response::HTTP_BAD_REQUEST);
+        }
+
+        // --- SI VALIDATION OK : HACHAGE DU MOT DE PASSE ---
+        $hashedPassword = $passwordHasher->hashPassword($user, $user->getPlainPassword());
+        $user->setPassword($hashedPassword);
+        $user->setPlainPassword(null); // On vide le mot de passe en clair par sécurité
+
+        // 4. Gestion des Sports (Particuliers)
         $sportsData = $data['sports'] ?? '[]';
         $sportIds = is_array($sportsData) ? $sportsData : json_decode($sportsData, true);
 
@@ -103,48 +142,39 @@ class AuthController extends AbstractController
             }
         }
 
+        // 5. Gestion du Profil (Professionnels)
         if ($userType === 'professional') {
             $profile = new Profile();
             $profile->setCity($data['city'] ?? 'Non renseignée');
             $profile->setLevel($data['level'] ?? 'Débutant');
             $profile->setYearsOfExperience((int)($data['years_of_experience'] ?? 0));
             $profile->setSpecialty('Coach Sportif');
-
-            // Stats & Sécurité par défaut
             $profile->setTotalReviews(0);
             $profile->setIsVerified(false);
             $profile->setIsActive(true);
             $profile->setCreatedAt(new \DateTimeImmutable());
             $profile->setUpdatedAt(new \DateTimeImmutable());
 
-            // --- GÉOCODAGE AVEC NETTOYAGE ---
+            // Géocodage
             $cityInput = $data['city'] ?? null;
             if ($cityInput) {
                 try {
-                    // Nettoyage : On enlève les (78640) et les tirets pour l'API
                     $cleanCity = trim(preg_replace('/\s*\(.*\)\s*/', '', $cityInput));
                     $cleanCity = str_replace(' - ', ' ', $cleanCity);
-
                     $apiUrl = "https://api-adresse.data.gouv.fr/search/?q=" . urlencode($cleanCity) . "&limit=1";
-
-                    // On utilise @ pour éviter les warnings si l'API est injoignable
                     $response = @file_get_contents($apiUrl);
-
                     if ($response) {
                         $geoData = json_decode($response, true);
                         if (!empty($geoData['features'])) {
                             $coordinates = $geoData['features'][0]['geometry']['coordinates'];
-                            // API Gouv renvoie [Longitude, Latitude]
                             $profile->setLongitude((string)$coordinates[0]);
                             $profile->setLatitude((string)$coordinates[1]);
                         }
                     }
-                } catch (\Exception $e) {
-                    // En cas d'erreur API, on continue l'inscription sans bloquer
-                }
+                } catch (\Exception $e) {}
             }
 
-            // 4. Traitement des fichiers (Upload)
+            // Upload des documents
             if ($diplomaFile) {
                 $newDiplomaName = uniqid('dip_').'.'.$diplomaFile->guessExtension();
                 $diplomaFile->move($this->getParameter('uploads_directory'), $newDiplomaName);
@@ -168,9 +198,7 @@ class AuthController extends AbstractController
             $em->persist($profile);
         }
 
-        $hashedPassword = $passwordHasher->hashPassword($user, $data['password']);
-        $user->setPassword($hashedPassword);
-
+        // 6. Sauvegarde finale
         $em->persist($user);
         $em->flush();
 
@@ -295,11 +323,18 @@ class AuthController extends AbstractController
     {
         $user = $this->getUser();
         if (!$user) {
-            return $this->json(['message' => 'Non authentifié'], 401);
+            return $this->json(['message' => 'Non authentifié'], Response::HTTP_UNAUTHORIZED);
         }
 
-        // On prépare les sports du User (Particulier)
+        // 1. Initialisation des variables de profil et de vérification
+        $profileData = null;
         $userSports = [];
+
+        // Par défaut, un particulier ou un admin est considéré comme "vérifié"
+        // car ils n'ont pas de documents à faire valider.
+        $isVerified = true;
+
+        // 2. Traitement des sports rattachés directement au User (Particuliers)
         foreach ($user->getSports() as $sport) {
             $userSports[] = [
                 'id' => $sport->getId(),
@@ -308,10 +343,13 @@ class AuthController extends AbstractController
             ];
         }
 
-        // On prépare les infos du Profile (Coach)
-        $profileData = null;
+        // 3. Traitement spécifique au profil Professionnel (Coach)
         if ($user->getUserType() === 'professional' && $user->getProfile()) {
             $profile = $user->getProfile();
+
+            // On récupère le statut de vérification réel du coach
+            $isVerified = $profile->getIsVerified();
+
             $profileSports = [];
             foreach ($profile->getSports() as $sport) {
                 $profileSports[] = [
@@ -325,10 +363,16 @@ class AuthController extends AbstractController
                 'id' => $profile->getId(),
                 'city' => $profile->getCity(),
                 'bio' => $profile->getBio(),
+                'level' => $profile->getLevel(),
+                'yearsOfExperience' => $profile->getYearsOfExperience(),
+                'isVerified' => $isVerified,
+                'diplomas' => $profile->getDiplomas(),
+                'certifications' => $profile->getCertifications(),
                 'sports' => $profileSports,
             ];
         }
 
+        // 4. Retour de la réponse JSON structurée
         return $this->json([
             'id' => $user->getId(),
             'email' => $user->getEmail(),
@@ -339,9 +383,10 @@ class AuthController extends AbstractController
             'userType' => $user->getUserType(),
             'roles' => $user->getRoles(),
             'isActive' => $user->isActive(),
+            'isVerified' => $isVerified, // Champ crucial pour le blocage Frontend
             'createdAt' => $user->getCreatedAt() ? $user->getCreatedAt()->format(\DateTimeInterface::ATOM) : null,
             'updatedAt' => $user->getUpdatedAt() ? $user->getUpdatedAt()->format(\DateTimeInterface::ATOM) : null,
-            'sports' => $userSports, // Sports rattachés directement au User (Particulier)
+            'sports' => $userSports,
             'profile' => $profileData
         ]);
     }

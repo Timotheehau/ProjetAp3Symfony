@@ -5,6 +5,7 @@ namespace App\Controller;
 use App\Entity\Booking;
 use App\Entity\SessionHistory;
 use App\Repository\BookingRepository;
+use App\Repository\UserRepository; // Ajout de l'import
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -15,7 +16,7 @@ use Symfony\Component\Routing\Attribute\Route;
 class NotificationController extends AbstractController
 {
     #[Route('/list', name: 'notifications_list', methods: ['GET'])]
-    public function list(BookingRepository $bookingRepo, EntityManagerInterface $em): JsonResponse
+    public function list(BookingRepository $bookingRepo, UserRepository $userRepo, EntityManagerInterface $em): JsonResponse
     {
         $user = $this->getUser();
         if (!$user) return $this->json([], 401);
@@ -23,6 +24,29 @@ class NotificationController extends AbstractController
         $notifications = [];
         $limitDate = new \DateTimeImmutable('-7 days');
 
+        // --- 1. LOGIQUE ADMIN : Coachs en attente de vérification ---
+        if (in_array('ROLE_ADMIN', $user->getRoles())) {
+            $pendingCoaches = $userRepo->createQueryBuilder('u')
+                ->join('u.profile', 'p')
+                ->where('u.userType = :type')
+                ->andWhere('p.isVerified = :verified')
+                ->setParameter('type', 'professional')
+                ->setParameter('verified', false)
+                ->getQuery()->getResult();
+
+            foreach ($pendingCoaches as $coach) {
+                $notifications[] = [
+                    'type' => 'request',
+                    'id' => $coach->getId(),
+                    'message' => "Vérification requise : {$coach->getFirstName()} {$coach->getLastName()} attend sa validation.",
+                    'date' => $coach->getCreatedAt()->format('Y-m-d H:i:s'),
+                    'isRead' => false,
+                    'category' => 'admin_verify' // Tag pour aider le front à rediriger
+                ];
+            }
+        }
+
+        // --- 2. LOGIQUE COACH (Professional) ---
         if ($user->getUserType() === 'professional') {
             $profile = $user->getProfile();
             $bookings = $bookingRepo->createQueryBuilder('b')
@@ -45,8 +69,10 @@ class NotificationController extends AbstractController
 
                 $notifications[] = $this->formatNotification($b, $message, $b->getStatus() === 'pending' ? 'request' : 'alert');
             }
-        } else {
-            // LOGIQUE CLIENT
+        }
+
+        // --- 3. LOGIQUE ÉLÈVE (Particular) ---
+        if ($user->getUserType() === 'particular') {
             $bookings = $bookingRepo->createQueryBuilder('b')
                 ->where('b.client = :user')
                 ->andWhere('b.status IN (:statuses)')
@@ -79,24 +105,41 @@ class NotificationController extends AbstractController
             }
         }
 
+        // Tri par date décroissante (plus récent en haut)
         usort($notifications, fn($a, $b) => strcmp($b['date'], $a['date']));
         return $this->json($notifications);
     }
 
     #[Route('/count', name: 'notifications_count', methods: ['GET'])]
-    public function count(BookingRepository $bookingRepo, EntityManagerInterface $em): JsonResponse
+    public function count(BookingRepository $bookingRepo, UserRepository $userRepo, EntityManagerInterface $em): JsonResponse
     {
         $user = $this->getUser();
         if (!$user) return $this->json(['total' => 0]);
 
+        $total = 0;
+
+        // Compteur Admin
+        if (in_array('ROLE_ADMIN', $user->getRoles())) {
+            $total += $userRepo->createQueryBuilder('u')
+                ->select('count(u.id)')
+                ->join('u.profile', 'p')
+                ->where('u.userType = :type AND p.isVerified = false')
+                ->setParameter('type', 'professional')
+                ->getQuery()->getSingleScalarResult();
+        }
+
+        // Compteur Coach
         if ($user->getUserType() === 'professional') {
-            $total = $bookingRepo->count(['profile' => $user->getProfile(), 'status' => 'pending', 'isStatusSeenByClient' => false]);
-        } else {
+            $total += $bookingRepo->count(['profile' => $user->getProfile(), 'status' => 'pending', 'isStatusSeenByClient' => false]);
+        }
+
+        // Compteur Élève
+        if ($user->getUserType() === 'particular') {
             $newConfirmations = $bookingRepo->count(['client' => $user, 'status' => 'confirmed', 'isStatusSeenByClient' => false]);
             $newFeedbacks = (int)$em->getRepository(SessionHistory::class)->createQueryBuilder('sh')
                 ->select('count(sh.id)')->where('sh.client = :user AND sh.isReadByClient = false')
                 ->setParameter('user', $user)->getQuery()->getSingleScalarResult();
-            $total = $newConfirmations + $newFeedbacks;
+            $total += ($newConfirmations + $newFeedbacks);
         }
 
         return $this->json(['total' => $total]);
@@ -120,13 +163,13 @@ class NotificationController extends AbstractController
         $em->flush();
         return $this->json(['success' => true]);
     }
+
     #[Route('/mark-all-as-seen', name: 'notifications_mark_all_seen', methods: ['POST'])]
     public function markAllAsSeen(EntityManagerInterface $em): JsonResponse
     {
         $user = $this->getUser();
         if (!$user) return $this->json(['success' => false], 401);
 
-        // 1. Pour les Bookings (Demandes, Confirmations, Annulations)
         $qbBooking = $em->createQueryBuilder();
         $queryBooking = $qbBooking->update(Booking::class, 'b')
             ->set('b.isStatusSeenByClient', 'true')
@@ -140,7 +183,6 @@ class NotificationController extends AbstractController
         }
         $queryBooking->getQuery()->execute();
 
-        // 2. Pour les SessionHistory (Feedbacks / Bilans) - Uniquement pour les clients
         if ($user->getUserType() === 'particular') {
             $em->createQueryBuilder()
                 ->update(SessionHistory::class, 'sh')
@@ -161,39 +203,21 @@ class NotificationController extends AbstractController
         $data = json_decode($request->getContent(), true);
         $items = $data['items'] ?? [];
 
-        if (empty($items)) {
-            return $this->json(['success' => false, 'message' => 'Aucun élément sélectionné'], 400);
-        }
-
         foreach ($items as $item) {
             $id = (int)($item['id'] ?? 0);
             $type = $item['type'] ?? '';
 
-            // 1. Pour les notifications basées sur les Bookings
             if (in_array($type, ['confirmation', 'request', 'alert'])) {
                 $booking = $em->getRepository(Booking::class)->find($id);
-                if ($booking) {
-                    // On ne supprime pas la ligne en BDD (car le match existe toujours)
-                    // On le masque simplement de la vue "notifications"
-                    $booking->setIsStatusSeenByClient(true);
-                }
-            }
-            // 2. Pour les notifications de Bilans (SessionHistory)
-            elseif ($type === 'feedback') {
+                if ($booking) $booking->setIsStatusSeenByClient(true);
+            } elseif ($type === 'feedback') {
                 $history = $em->getRepository(SessionHistory::class)->find($id);
-                if ($history) {
-                    $history->setIsReadByClient(true);
-                }
+                if ($history) $history->setIsReadByClient(true);
             }
         }
 
-        // On flush une seule fois à la fin pour optimiser les performances
         $em->flush();
-
-        return $this->json([
-            'success' => true,
-            'message' => count($items) . ' notifications marquées comme lues'
-        ]);
+        return $this->json(['success' => true]);
     }
 
     private function formatNotification($booking, $message, $type): array {

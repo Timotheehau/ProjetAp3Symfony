@@ -61,7 +61,7 @@ class AppFixtures extends Fixture
         $admin->setPhone('0600000000');
         $admin->setRoles(['ROLE_ADMIN']);
         $admin->setUserType('professional');
-        $admin->setPassword($this->passwordHasher->hashPassword($admin, 'admin123'));
+        $admin->setPassword($this->passwordHasher->hashPassword($admin, 'ckorie,d,co56D'));
         $admin->setIsActive(true);
         $manager->persist($admin);
 
@@ -88,7 +88,7 @@ class AppFixtures extends Fixture
         // ============================================
         $profiles = [];
         $cities = ['Paris', 'Lyon', 'Marseille', 'Toulouse', 'Nantes', 'Bordeaux', 'Lille'];
-        $specialties = ['coach', 'arbitre', 'health_specialist'];
+        $specialties = ['coach', 'arbitre'];
         $levels = ['pro', 'semi-pro', 'amateur'];
 
         for ($i = 1; $i <= 15; $i++) {
@@ -135,6 +135,7 @@ class AppFixtures extends Fixture
             // CRÉER DES DISPONIBILITÉS POUR CE PROFIL
             // ============================================
             // Disponibilité lundi à vendredi, 9h-17h
+            $profileSports = $profile->getSports()->toArray();
             for ($day = 1; $day <= 5; $day++) {
                 $availability = new Availability();
                 $availability->setProfile($profile);
@@ -143,6 +144,12 @@ class AppFixtures extends Fixture
                 $availability->setEndTime(new \DateTime('17:00'));
                 $availability->setIsRecurring(true);
                 $availability->setIsAvailable(true);
+
+                // IMPORTANT : On associe un sport au créneau (indispensable pour ton front)
+                if (!empty($profileSports)) {
+                    $availability->setSport($profileSports[array_rand($profileSports)]);
+                }
+
                 $manager->persist($availability);
             }
         }
