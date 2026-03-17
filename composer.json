@@ -89,13 +89,8 @@
             "importmap:install": "symfony-cmd"
         },
         "post-install-cmd": [
-            "@auto-scripts",
-            "php bin/console doctrine:schema:update --force"
-        ],
-        "post-update-cmd": [
             "@auto-scripts"
-        ]
-    },
+        ],
         "post-update-cmd": [
             "@auto-scripts"
         ]
