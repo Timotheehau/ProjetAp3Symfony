@@ -72,8 +72,7 @@ class PasswordResetController extends AbstractController
                 <p>Ce lien expire dans 1 heure.</p>
                 <p>Si vous n'avez pas demandé cette réinitialisation, ignorez cet email.</p>
             ");
-        dump($resetUrl);
-        dump($user->getEmail());
+
         $mailer->send($emailMessage);
 
         return $this->json(['message' => 'Si cet email existe, un lien a été envoyé.']);
