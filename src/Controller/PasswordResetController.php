@@ -58,8 +58,8 @@ class PasswordResetController extends AbstractController
         // Envoyer le mail
         $resetUrl = 'https://pointmatchfront.vercel.app/reset-password?token=' . $token;
 
-        $emailMessage = (new Email())
-            ->from('onboarding@resend.dev')
+        $emailMessage = new Email()
+            ->from('titi.hauser@gmail.com')
             ->to($user->getEmail())
             ->subject('Réinitialisation de votre mot de passe')
             ->html("
