@@ -90,7 +90,7 @@ class PasswordResetController extends AbstractController
             error_log("DEBUG MAILER: Tentative d'envoi via MailerInterface...");
 // COPIE-COLLE TA LIGNE MAILTRAP ICI EN DUR
 // On passe de 2525 à 587
-            $dsn = 'smtp://d599cb7128f924:6c6d278348@sandbox.smtp.mailtrap.io:587?encryption=tls&auth_mode=login';
+            $dsn = 'smtps://d599cb7128f924:6c6d278348@sandbox.smtp.mailtrap.io:465?auth_mode=login';
             $transport = Transport::fromDsn($dsn);
             $realMailer = new Mailer($transport);
 
