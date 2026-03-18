@@ -94,6 +94,12 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\JoinTable(name: 'user_sport')]
     private Collection $sports;
 
+    /**
+     * @var Collection<int, PasswordResetToken>
+     */
+    #[ORM\OneToMany(targetEntity: PasswordResetToken::class, mappedBy: 'user', orphanRemoval: true)]
+    private Collection $passwordResetTokens;
+
     public function __construct()
     {
         $this->bookings = new ArrayCollection();
@@ -102,6 +108,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         $this->reviewLikes = new ArrayCollection();
         $this->sports = new ArrayCollection();
         $this->createdAt = new \DateTimeImmutable();
+        $this->passwordResetTokens = new ArrayCollection();
     }
 
     public function getId(): ?int
@@ -407,6 +414,36 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
                 $reviewLike->setUser(null);
             }
         }
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, PasswordResetToken>
+     */
+    public function getPasswordResetTokens(): Collection
+    {
+        return $this->passwordResetTokens;
+    }
+
+    public function addPasswordResetToken(PasswordResetToken $passwordResetToken): static
+    {
+        if (!$this->passwordResetTokens->contains($passwordResetToken)) {
+            $this->passwordResetTokens->add($passwordResetToken);
+            $passwordResetToken->setUser($this);
+        }
+
+        return $this;
+    }
+
+    public function removePasswordResetToken(PasswordResetToken $passwordResetToken): static
+    {
+        if ($this->passwordResetTokens->removeElement($passwordResetToken)) {
+            // set the owning side to null (unless already changed)
+            if ($passwordResetToken->getUser() === $this) {
+                $passwordResetToken->setUser(null);
+            }
+        }
+
         return $this;
     }
 }
