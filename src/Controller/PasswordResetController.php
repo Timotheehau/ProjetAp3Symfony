@@ -28,18 +28,25 @@ class PasswordResetController extends AbstractController
         $data = json_decode($request->getContent(), true);
         $email = $data['email'] ?? null;
 
+        // LOG 1 : On vérifie ce que le front envoie
+        error_log("DEBUG MAILER: Email reçu du front : " . ($email ?? 'NULL'));
+
         if (!$email) {
             return $this->json(['message' => 'Email requis'], Response::HTTP_BAD_REQUEST);
         }
 
         $user = $userRepository->findOneBy(['email' => $email]);
 
-        // Sécurité : on répond toujours OK même si l'email n'existe pas
         if (!$user) {
+            // LOG 2 : Si l'utilisateur n'est pas trouvé
+            error_log("DEBUG MAILER: Utilisateur NON TROUVE en base pour : " . $email);
             return $this->json(['message' => 'Si cet email existe, un lien a été envoyé.']);
         }
 
-        // Supprimer les anciens tokens de cet utilisateur
+        // LOG 3 : L'utilisateur existe, on continue
+        error_log("DEBUG MAILER: Utilisateur TROUVE : " . $user->getEmail() . " (ID: " . $user->getId() . ")");
+
+        // Supprimer les anciens tokens
         $oldTokens = $tokenRepository->findBy(['user' => $user]);
         foreach ($oldTokens as $oldToken) {
             $em->remove($oldToken);
@@ -55,10 +62,13 @@ class PasswordResetController extends AbstractController
         $em->persist($resetToken);
         $em->flush();
 
+        // LOG 4 : Token créé en base
+        error_log("DEBUG MAILER: Token généré et enregistré en BDD.");
+
         // Envoyer le mail
         $resetUrl = 'https://pointmatchfront.vercel.app/reset-password?token=' . $token;
 
-        $emailMessage = new Email()
+        $emailMessage = (new Email())
             ->from('titi.hauser@gmail.com')
             ->to($user->getEmail())
             ->subject('Réinitialisation de votre mot de passe')
@@ -73,7 +83,19 @@ class PasswordResetController extends AbstractController
                 <p>Si vous n'avez pas demandé cette réinitialisation, ignorez cet email.</p>
             ");
 
-        $mailer->send($emailMessage);
+        try {
+            // LOG 5 : Juste avant l'envoi
+            error_log("DEBUG MAILER: Tentative d'envoi via MailerInterface...");
+
+            $mailer->send($emailMessage);
+
+            // LOG 6 : Si on arrive ici, c'est que send() n'a pas crashé
+            error_log("DEBUG MAILER: Commande mailer->send() terminée avec succès.");
+
+        } catch (\Exception $e) {
+            // LOG 7 : Si une erreur survient pendant l'envoi (ex: SMTP refusé)
+            error_log("DEBUG MAILER ERROR: L'envoi a échoué ! Erreur : " . $e->getMessage());
+        }
 
         return $this->json(['message' => 'Si cet email existe, un lien a été envoyé.']);
     }
