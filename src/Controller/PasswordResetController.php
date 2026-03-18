@@ -15,8 +15,7 @@ use Symfony\Component\Mime\Email;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Mime\Address;
-use Symfony\Component\Mailer\Transport;
-use Symfony\Component\Mailer\Mailer;
+
 class PasswordResetController extends AbstractController
 {
     #[Route('/api/forgot-password', name: 'api_forgot_password', methods: ['POST'])]
@@ -88,14 +87,8 @@ class PasswordResetController extends AbstractController
         try {
             // LOG 5 : Juste avant l'envoi
             error_log("DEBUG MAILER: Tentative d'envoi via MailerInterface...");
-// COPIE-COLLE TA LIGNE MAILTRAP ICI EN DUR
-// On passe de 2525 à 587
-            $dsn = 'smtps://d599cb7128f924:6c6d278348@sandbox.smtp.mailtrap.io:465?auth_mode=login';
-            $transport = Transport::fromDsn($dsn);
-            $realMailer = new Mailer($transport);
 
-            $realMailer->send($emailMessage);
-            error_log("DEBUG MAILER: ENVOI FORCE EN DUR REUSSI");
+            $mailer->send($emailMessage);
 
             // LOG 6 : Si on arrive ici, c'est que send() n'a pas crashé
             error_log("DEBUG MAILER: Commande mailer->send() terminée avec succès.");
