@@ -14,6 +14,7 @@ use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Mime\Email;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Mime\Address;
 
 class PasswordResetController extends AbstractController
 {
@@ -69,7 +70,7 @@ class PasswordResetController extends AbstractController
         $resetUrl = 'https://pointmatchfront.vercel.app/reset-password?token=' . $token;
 
         $emailMessage = (new Email())
-            ->from('titi.hauser@gmail.com')
+            ->from(new Address('titi.hauser@gmail.com', 'PointMatch')) // Identité complète
             ->to($user->getEmail())
             ->subject('Réinitialisation de votre mot de passe')
             ->html("
