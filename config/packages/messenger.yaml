@@ -22,7 +22,7 @@ framework:
             messenger.bus.default: []
 
         routing:
-            # ON CHANGE 'async' PAR 'sync' ICI :
-        # Symfony\Component\Mailer\Messenger\SendEmailMessage: sync
-        # Symfony\Component\Notifier\Message\ChatMessage: sync
-        # Symfony\Component\Notifier\Message\SmsMessage: sync
+            # ON DÉCOMMENTE (enlève le #) ET ON UTILISE 'sync'
+            Symfony\Component\Mailer\Messenger\SendEmailMessage: sync
+            Symfony\Component\Notifier\Message\ChatMessage: sync
+            Symfony\Component\Notifier\Message\SmsMessage: sync
