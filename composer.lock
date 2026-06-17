@@ -10627,8 +10627,5 @@
         "ext-pdo_mysql": "*"
     },
     "platform-dev": {},
-    "platform-overrides": {
-        "php": "8.4.14"
-    },
     "plugin-api-version": "2.6.0"
 }
