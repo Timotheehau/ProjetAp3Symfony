@@ -10,6 +10,15 @@ class AuthControllerTest extends WebTestCase
 {
     use FixtureTrait;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        // La passphrase réelle (.env.test.local) ne correspond pas à config/jwt/private.pem ;
+        // même contournement que AdminControllerTest pour pouvoir signer un vrai JWT en test.
+        $_ENV['JWT_PASSPHRASE'] = 'votre_passphrase_de_test';
+        $_SERVER['JWT_PASSPHRASE'] = 'votre_passphrase_de_test';
+    }
+
     public function testRegisterFailsWhenRequiredFieldsAreMissing(): void
     {
         $client = static::createClient([], ['HTTP_HOST' => 'pointmatch.m2l.lan']);
@@ -203,7 +212,7 @@ class AuthControllerTest extends WebTestCase
         $oldToken = new RefreshToken();
         $oldToken->setToken('test-refresh-' . uniqid());
         $oldToken->setUser($user);
-        $oldToken->setExpiresAt((new \DateTimeImmutable())->modify('+30 days'));
+        $oldToken->setExpiresAt((new \DateTime())->modify('+30 days'));
         $this->em()->persist($oldToken);
         $this->em()->flush();
         $oldTokenValue = $oldToken->getToken();

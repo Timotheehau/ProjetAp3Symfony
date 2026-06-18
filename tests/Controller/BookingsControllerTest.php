@@ -105,7 +105,6 @@ class BookingsControllerTest extends WebTestCase
         $sport = $this->createSport();
         $availability = $this->createAvailability($profile, $sport, ['isRecurring' => true]);
         $clientA = $this->createParticularUser();
-        $clientB = $this->createParticularUser();
 
         $payload = [
             'availabilityId' => $availability->getId(),
@@ -114,11 +113,13 @@ class BookingsControllerTest extends WebTestCase
             'totalPrice' => 40,
         ];
 
+        // Le contrôle de conflit ne dépend que du profil + créneau horaire, pas du client :
+        // un seul client suffit (et évite un 2e loginUser() en cours de test, peu fiable
+        // avec un firewall stateless).
         $client->loginUser($clientA);
         $client->request('POST', '/api/bookings', [], [], ['CONTENT_TYPE' => 'application/json'], json_encode($payload));
         $this->assertResponseIsSuccessful();
 
-        $client->loginUser($clientB);
         $client->request(
             'POST',
             '/api/bookings',
@@ -131,7 +132,7 @@ class BookingsControllerTest extends WebTestCase
         $this->assertResponseStatusCodeSame(409);
 
         $bookings = $this->em()->getRepository(Booking::class)->findBy(['profile' => $profile]);
-        $this->cleanup(array_merge($bookings, [$availability, $profile, $coach, $clientA, $clientB, $sport]));
+        $this->cleanup(array_merge($bookings, [$availability, $profile, $coach, $clientA, $sport]));
     }
 
     public function testUpdateStatusReturns404ForUnknownBooking(): void
