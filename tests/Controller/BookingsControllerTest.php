@@ -104,38 +104,38 @@ class BookingsControllerTest extends WebTestCase
         [$coach, $profile] = $this->createProfessionalUser();
         $sport = $this->createSport();
         $availability = $this->createAvailability($profile, $sport, ['isRecurring' => true]);
-        $clientA = $this->createParticularUser();
 
-        $payload = [
-            'availabilityId' => $availability->getId(),
-            'startTime' => '2026-07-02 09:00:00',
-            'endTime' => '2026-07-02 10:00:00',
-            'totalPrice' => 40,
-        ];
+        // Réservation existante créée directement (le contrôle de conflit ne dépend que du
+        // profil + créneau horaire, pas de qui réserve) : une seule requête HTTP authentifiée
+        // suffit alors pour ce test, ce qui évite les soucis de simulation loginUser() sur un
+        // firewall stateless à travers plusieurs requêtes/clients.
+        $existingClient = $this->createParticularUser();
+        $existingBooking = $this->createBooking(
+            $existingClient,
+            $profile,
+            new \DateTime('2026-07-02 09:00:00'),
+            new \DateTime('2026-07-02 10:00:00')
+        );
 
-        // Le contrôle de conflit ne dépend que du profil + créneau horaire, pas du client :
-        // un seul utilisateur suffit. On utilise un 2e client pour la 2e requête car la
-        // simulation loginUser() d'un firewall stateless ne couvre fiablement que la requête
-        // suivante sur un même client, pas une 2e requête à la suite.
-        $client->loginUser($clientA);
-        $client->request('POST', '/api/bookings', [], [], ['CONTENT_TYPE' => 'application/json'], json_encode($payload));
-        $this->assertResponseIsSuccessful();
-
-        $secondClient = static::createClient([], ['HTTP_HOST' => 'pointmatch.m2l.lan']);
-        $secondClient->loginUser($clientA);
-        $secondClient->request(
+        $newClient = $this->createParticularUser();
+        $client->loginUser($newClient);
+        $client->request(
             'POST',
             '/api/bookings',
             [],
             [],
             ['CONTENT_TYPE' => 'application/json'],
-            json_encode(array_merge($payload, ['startTime' => '2026-07-02 09:30:00', 'endTime' => '2026-07-02 10:30:00']))
+            json_encode([
+                'availabilityId' => $availability->getId(),
+                'startTime' => '2026-07-02 09:30:00',
+                'endTime' => '2026-07-02 10:30:00',
+                'totalPrice' => 40,
+            ])
         );
 
         $this->assertResponseStatusCodeSame(409);
 
-        $bookings = $this->em()->getRepository(Booking::class)->findBy(['profile' => $profile]);
-        $this->cleanup(array_merge($bookings, [$availability, $profile, $coach, $clientA, $sport]));
+        $this->cleanup([$existingBooking, $availability, $profile, $coach, $existingClient, $newClient, $sport]);
     }
 
     public function testUpdateStatusReturns404ForUnknownBooking(): void
