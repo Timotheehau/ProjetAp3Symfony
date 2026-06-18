@@ -114,13 +114,16 @@ class BookingsControllerTest extends WebTestCase
         ];
 
         // Le contrôle de conflit ne dépend que du profil + créneau horaire, pas du client :
-        // un seul client suffit (et évite un 2e loginUser() en cours de test, peu fiable
-        // avec un firewall stateless).
+        // un seul utilisateur suffit. On utilise un 2e client pour la 2e requête car la
+        // simulation loginUser() d'un firewall stateless ne couvre fiablement que la requête
+        // suivante sur un même client, pas une 2e requête à la suite.
         $client->loginUser($clientA);
         $client->request('POST', '/api/bookings', [], [], ['CONTENT_TYPE' => 'application/json'], json_encode($payload));
         $this->assertResponseIsSuccessful();
 
-        $client->request(
+        $secondClient = static::createClient([], ['HTTP_HOST' => 'pointmatch.m2l.lan']);
+        $secondClient->loginUser($clientA);
+        $secondClient->request(
             'POST',
             '/api/bookings',
             [],
