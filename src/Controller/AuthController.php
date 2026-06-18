@@ -303,7 +303,7 @@ class AuthController extends AbstractController
         $newRefreshToken = new RefreshToken();
         $newRefreshToken->setToken(bin2hex(random_bytes(64)));
         $newRefreshToken->setUser($user);
-        $newRefreshToken->setExpiresAt((new \DateTimeImmutable())->modify('+30 days'));
+        $newRefreshToken->setExpiresAt((new \DateTime())->modify('+30 days'));
 
         $em->persist($newRefreshToken);
 
