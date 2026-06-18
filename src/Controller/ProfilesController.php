@@ -49,7 +49,6 @@ class ProfilesController extends AbstractController
                             new OA\Property(property: 'id', type: 'integer'),
                             new OA\Property(property: 'specialty', type: 'string'),
                             new OA\Property(property: 'level', type: 'string'),
-                            new OA\Property(property: 'hourlyRate', type: 'number'),
                             new OA\Property(property: 'city', type: 'string'),
                             new OA\Property(property: 'averageRating', type: 'number'),
                             new OA\Property(property: 'totalReviews', type: 'integer')
@@ -90,7 +89,6 @@ class ProfilesController extends AbstractController
                     'level' => $profile->getLevel(),
                     'bio' => $profile->getBio(),
                     'yearsOfExperience' => $profile->getYearsOfExperience(),
-                    'hourlyRate' => $profile->getHourlyRate(),
                     'city' => $profile->getCity(),
                     'averageRating' => $profile->getAverageRating(),
                     'totalReviews' => $profile->getTotalReviews(),

@@ -195,7 +195,6 @@ class BookingsController extends AbstractController
                 'profile' => [
                     'id' => $booking->getProfile()->getId(),
                     'specialty' => $booking->getProfile()->getSpecialty(),
-                    'hourlyRate' => $booking->getProfile()->getHourlyRate(),
                     'user' => [
                         'firstName' => $booking->getProfile()->getUser()->getFirstName(),
                         'lastName' => $booking->getProfile()->getUser()->getLastName(),
