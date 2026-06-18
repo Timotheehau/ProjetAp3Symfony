@@ -10,13 +10,6 @@ use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 
 class AdminControllerTest extends WebTestCase
 {
-    protected function setUp(): void
-    {
-        parent::setUp();
-        $_ENV['JWT_PASSPHRASE'] = 'votre_passphrase_de_test';
-        $_SERVER['JWT_PASSPHRASE'] = 'votre_passphrase_de_test';
-    }
-
     public function testAdminStatsAreProtected(): void
     {
         $client = static::createClient([], [
