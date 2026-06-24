@@ -365,6 +365,7 @@ class AuthController extends AbstractController
                 'bio' => $profile->getBio(),
                 'level' => $profile->getLevel(),
                 'yearsOfExperience' => $profile->getYearsOfExperience(),
+                'hourlyRate' => $profile->getHourlyRate(),
                 'isVerified' => $isVerified,
                 'diplomas' => $profile->getDiplomas(),
                 'certifications' => $profile->getCertifications(),
@@ -453,6 +454,7 @@ class AuthController extends AbstractController
 
             $profile->setCity($profileData['city'] ?? $profile->getCity());
             $profile->setBio($profileData['bio'] ?? $profile->getBio());
+            $profile->setHourlyRate($profileData['hourlyRate'] ?? $profile->getHourlyRate());
 
             // Si tu stockes AUSSI les sports dans Profile pour les pros :
             if (isset($profileData['sports'])) {

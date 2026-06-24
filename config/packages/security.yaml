@@ -52,7 +52,9 @@ security:
         - { path: ^/api/profiles, roles: PUBLIC_ACCESS, methods: [ GET ] }
         - { path: ^/api/venues, roles: PUBLIC_ACCESS, methods: [ GET ] }
         - { path: ^/api/reviews, roles: PUBLIC_ACCESS, methods: [ GET ] }
+        - { path: ^/api/equipment, roles: PUBLIC_ACCESS, methods: [ GET ] }
 
         # Routes protégées
         - { path: ^/api/admin, roles: ROLE_ADMIN }
+        - { path: ^/api/equipment, roles: ROLE_COACH, methods: [ POST, DELETE ] }
         - { path: ^/api, roles: ROLE_USER }

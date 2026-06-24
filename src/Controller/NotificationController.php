@@ -105,9 +105,55 @@ class NotificationController extends AbstractController
             }
         }
 
+        // --- 4. RAPPELS J-2 : réservations confirmées qui démarrent dans moins de 2 jours ---
+        foreach ($this->findUpcomingReminderBookings($bookingRepo, $user) as $b) {
+            $isProfessional = $user->getUserType() === 'professional';
+            $otherPartyName = $isProfessional
+                ? $b->getClient()->getFirstName()
+                : $b->getProfile()->getUser()->getFirstName();
+
+            $notifications[] = [
+                'type' => 'reminder',
+                'id' => $b->getId(),
+                'message' => "Rappel : séance avec {$otherPartyName} le {$b->getStartTime()->format('d/m à H:i')}.",
+                'date' => $b->getStartTime()->format('Y-m-d H:i:s'),
+                'isRead' => false
+            ];
+        }
+
         // Tri par date décroissante (plus récent en haut)
         usort($notifications, fn($a, $b) => strcmp($b['date'], $a['date']));
         return $this->json($notifications);
+    }
+
+    /**
+     * @return Booking[] Réservations confirmées de l'utilisateur démarrant dans les 2 prochains jours
+     */
+    private function findUpcomingReminderBookings(BookingRepository $bookingRepo, $user): array
+    {
+        if (!in_array($user->getUserType(), ['professional', 'particular'])) {
+            return [];
+        }
+
+        if ($user->getUserType() === 'professional' && !$user->getProfile()) {
+            return [];
+        }
+
+        $qb = $bookingRepo->createQueryBuilder('b')
+            ->where('b.status = :confirmed')
+            ->andWhere('b.startTime > :now')
+            ->andWhere('b.startTime <= :limit')
+            ->setParameter('confirmed', 'confirmed')
+            ->setParameter('now', new \DateTimeImmutable())
+            ->setParameter('limit', new \DateTimeImmutable('+2 days'));
+
+        if ($user->getUserType() === 'professional') {
+            $qb->andWhere('b.profile = :profile')->setParameter('profile', $user->getProfile());
+        } else {
+            $qb->andWhere('b.client = :user')->setParameter('user', $user);
+        }
+
+        return $qb->getQuery()->getResult();
     }
 
     #[Route('/count', name: 'notifications_count', methods: ['GET'])]
@@ -141,6 +187,9 @@ class NotificationController extends AbstractController
                 ->setParameter('user', $user)->getQuery()->getSingleScalarResult();
             $total += ($newConfirmations + $newFeedbacks);
         }
+
+        // Compteur rappels J-2 (coach et élève)
+        $total += count($this->findUpcomingReminderBookings($bookingRepo, $user));
 
         return $this->json(['total' => $total]);
     }

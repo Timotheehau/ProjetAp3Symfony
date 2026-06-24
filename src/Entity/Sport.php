@@ -45,12 +45,19 @@ class Sport
     #[ORM\OneToMany(targetEntity: Availability::class, mappedBy: 'sport')]
     private Collection $availabilities;
 
+    /**
+     * @var Collection<int, Equipment>
+     */
+    #[ORM\OneToMany(targetEntity: Equipment::class, mappedBy: 'sport', cascade: ['remove'])]
+    private Collection $equipments;
+
     public function __construct()
     {
         $this->profiles = new ArrayCollection();
         $this->venues = new ArrayCollection();
         $this->createdAt = new \DateTimeImmutable();
         $this->availabilities = new ArrayCollection();
+        $this->equipments = new ArrayCollection();
     }
 
     public function getId(): ?int
@@ -192,6 +199,33 @@ class Sport
             }
         }
 
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, Equipment>
+     */
+    public function getEquipments(): Collection
+    {
+        return $this->equipments;
+    }
+
+    public function addEquipment(Equipment $equipment): static
+    {
+        if (!$this->equipments->contains($equipment)) {
+            $this->equipments->add($equipment);
+            $equipment->setSport($this);
+        }
+        return $this;
+    }
+
+    public function removeEquipment(Equipment $equipment): static
+    {
+        if ($this->equipments->removeElement($equipment)) {
+            if ($equipment->getSport() === $this) {
+                $equipment->setSport(null);
+            }
+        }
         return $this;
     }
 }

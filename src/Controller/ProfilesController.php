@@ -92,6 +92,7 @@ class ProfilesController extends AbstractController
                     'city' => $profile->getCity(),
                     'averageRating' => $profile->getAverageRating(),
                     'totalReviews' => $profile->getTotalReviews(),
+                    'hourlyRate' => $profile->getHourlyRate(),
                     'isVerified' => $profile->getIsVerified(), // ← CORRECTION ICI
                     'user' => [
                         'firstName' => $profile->getUser()->getFirstName(),
@@ -186,6 +187,38 @@ class ProfilesController extends AbstractController
         }
     }
 
+    /**
+     * Le ou les coachs les mieux notés pour un sport donné
+     */
+    #[Route('/top-rated', name: 'profiles_top_rated', methods: ['GET'])]
+    public function topRated(Request $request, ProfileRepository $profileRepository): JsonResponse
+    {
+        $sportId = $request->query->get('sportId');
+        if (!$sportId) {
+            return $this->json(['success' => false, 'message' => 'Le paramètre sportId est requis'], 400);
+        }
+
+        $profiles = $profileRepository->findTopRatedBySport((int) $sportId);
+
+        return $this->json(['success' => true, 'data' => array_map($this->formatProfileSummary(...), $profiles)]);
+    }
+
+    /**
+     * Le ou les coachs les moins chers pour un sport donné
+     */
+    #[Route('/cheapest', name: 'profiles_cheapest', methods: ['GET'])]
+    public function cheapest(Request $request, ProfileRepository $profileRepository): JsonResponse
+    {
+        $sportId = $request->query->get('sportId');
+        if (!$sportId) {
+            return $this->json(['success' => false, 'message' => 'Le paramètre sportId est requis'], 400);
+        }
+
+        $profiles = $profileRepository->findCheapestBySport((int) $sportId);
+
+        return $this->json(['success' => true, 'data' => array_map($this->formatProfileSummary(...), $profiles)]);
+    }
+
     #[Route('/{id}', name: 'profiles_show', methods: ['GET'])]
     #[OA\Get(
         path: '/api/profiles/{id}',
@@ -227,6 +260,7 @@ class ProfilesController extends AbstractController
                 'diplomas' => $profile->getDiplomas(),
                 'averageRating' => $profile->getAverageRating(),
                 'totalReviews' => $profile->getTotalReviews(),
+                'hourlyRate' => $profile->getHourlyRate(),
                 'isVerified' => $profile->getIsVerified(),
                 'user' => [
                     'id' => $profile->getUser()->getId(),
@@ -238,6 +272,22 @@ class ProfilesController extends AbstractController
             ]
         ]);
     }
+    private function formatProfileSummary($profile): array
+    {
+        return [
+            'id' => $profile->getId(),
+            'specialty' => $profile->getSpecialty(),
+            'city' => $profile->getCity(),
+            'averageRating' => $profile->getAverageRating(),
+            'totalReviews' => $profile->getTotalReviews(),
+            'hourlyRate' => $profile->getHourlyRate(),
+            'user' => [
+                'firstName' => $profile->getUser()->getFirstName(),
+                'lastName' => $profile->getUser()->getLastName(),
+            ],
+        ];
+    }
+
     private function calculateDistance(float $lat1, float $lon1, float $lat2, float $lon2): float
     {
         $earthRadius = 6371; // Rayon de la Terre en kilomètres

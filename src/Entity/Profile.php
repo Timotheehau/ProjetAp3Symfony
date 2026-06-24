@@ -63,6 +63,10 @@ class Profile
     #[ORM\Column(type: Types::DECIMAL, precision: 3, scale: 2, nullable: true)]
     private ?string $averageRating = null;
 
+    #[ORM\Column(type: Types::DECIMAL, precision: 8, scale: 2, nullable: true)]
+    #[Assert\PositiveOrZero(message: 'Le tarif horaire doit être positif')]
+    private ?string $hourlyRate = null;
+
     #[ORM\Column]
     private int $totalReviews = 0;
 
@@ -247,6 +251,17 @@ class Profile
     public function setAverageRating(?string $averageRating): static
     {
         $this->averageRating = $averageRating;
+        return $this;
+    }
+
+    public function getHourlyRate(): ?string
+    {
+        return $this->hourlyRate;
+    }
+
+    public function setHourlyRate(?string $hourlyRate): static
+    {
+        $this->hourlyRate = $hourlyRate;
         return $this;
     }
 
