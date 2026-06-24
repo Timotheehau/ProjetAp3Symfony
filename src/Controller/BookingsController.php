@@ -203,7 +203,7 @@ class BookingsController extends AbstractController
             ]
         ]);
     }
-    
+
     #[Route('', name: 'bookings_create', methods: ['POST'])]
     #[OA\Post(
         path: '/api/bookings',

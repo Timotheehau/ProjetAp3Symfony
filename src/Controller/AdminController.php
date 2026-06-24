@@ -6,6 +6,7 @@ use App\Entity\User;
 use App\Entity\Notification;
 use App\Repository\UserRepository;
 use App\Repository\BookingRepository;
+use App\Repository\ProfileRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -160,6 +161,45 @@ class AdminController extends AbstractController
                 'startTime' => $booking->getStartTime()->format('d/m/Y H:i'),
             ];
         }, $bookings);
+
+        return $this->json(['success' => true, 'data' => $data]);
+    }
+
+    /**
+     * Nombre de réservations par profil et par ville
+     */
+    #[Route('/bookings/stats-by-profile', name: 'admin_bookings_stats_by_profile', methods: ['GET'])]
+    public function bookingsStatsByProfile(ProfileRepository $profileRepository): JsonResponse
+    {
+        $stats = $profileRepository->countBookingsByProfileAndCity();
+
+        $data = array_map(function($row) {
+            return [
+                'id_profile' => (int) $row['id_profile'],
+                'ville' => $row['ville'],
+                'nb_reservations' => (int) $row['nb_reservations'],
+            ];
+        }, $stats);
+
+        return $this->json(['success' => true, 'data' => $data]);
+    }
+
+    /**
+     * Liste des profils n'ayant jamais reçu de réservation
+     */
+    #[Route('/profiles/never-booked', name: 'admin_profiles_never_booked', methods: ['GET'])]
+    public function neverBookedProfiles(ProfileRepository $profileRepository): JsonResponse
+    {
+        $profiles = $profileRepository->findNeverBooked();
+
+        $data = array_map(function($profile) {
+            return [
+                'id_profile' => $profile->getId(),
+                'ville' => $profile->getCity(),
+                'firstName' => $profile->getUser()->getFirstName(),
+                'lastName' => $profile->getUser()->getLastName(),
+            ];
+        }, $profiles);
 
         return $this->json(['success' => true, 'data' => $data]);
     }
